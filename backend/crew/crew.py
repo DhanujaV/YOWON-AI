@@ -281,7 +281,7 @@ def _run_specialist(
             }.get(name, "score")
             score_val = getattr(report, score_field, FAILED_AGENT_SCORE)
 
-            msg = f"[{name.upper()}] Completed — score={score_val}/100 ({duration}s) source={parse_source}"
+            msg = f"[{name.upper()}] Completed — raw_score={score_val}/100 ({duration}s) source={parse_source}"
             if parse_source != "llm":
                 msg += " [parse degraded]"
 
@@ -303,9 +303,38 @@ def _run_specialist(
         return name, report, json.dumps(FALLBACKS[name]), str(exc)
 
 
-def _format_report_text(name: str, report: Any, raw: str) -> str:
+def _format_report_text(
+    name: str,
+    report: Any,
+    raw: str,
+    raw_scores: dict[str, int] | None = None,
+    calibrated_scores: dict[str, int] | None = None,
+    calibration_reasons: dict[str, list[str]] | None = None,
+) -> str:
     if hasattr(report, "model_dump"):
-        return json.dumps(report.model_dump(), indent=2)
+        payload = report.model_dump()
+        raw_scores = raw_scores or {}
+        calibrated_scores = calibrated_scores or {}
+        score_fields = {
+            "technical": ("technical_score",),
+            "security": ("security_score",),
+            "innovation": ("innovation_score", "scalability_score"),
+            "presentation": ("presentation_score",),
+            "risk": ("impact_score",),
+        }
+        dimensions = {
+            "technical": ("technical",), "security": ("security",),
+            "innovation": ("innovation", "scalability"),
+            "presentation": ("presentation",), "risk": ("impact",),
+        }
+        for field, dimension in zip(score_fields.get(name, ()), dimensions.get(name, ())):
+            payload[field] = calibrated_scores.get(dimension, payload.get(field, 0))
+        payload["raw_scores"] = {d: raw_scores.get(d, 0) for d in dimensions.get(name, ())}
+        payload["calibrated_scores"] = {d: calibrated_scores.get(d, 0) for d in dimensions.get(name, ())}
+        payload["calibration_reasons"] = {
+            d: (calibration_reasons or {}).get(d, []) for d in dimensions.get(name, ())
+        }
+        return json.dumps(payload, indent=2)
     return raw
 
 
@@ -518,23 +547,27 @@ def run_evaluation(
     )
 
     cross_exam = format_cross_exam(contradictions)
+    raw_score_map = computed["raw_agent_scores"]
+    calibrated_score_map = computed["calibrated_agent_scores"]
+    calibration_reasons = computed["agent_calibration_reasons"]
 
     return {
         "brief": brief_text,
-        "technical": _format_report_text("technical", technical, raw_outputs["technical"]),
-        "security": _format_report_text("security", security, raw_outputs["security"]),
-        "innovation": _format_report_text("innovation", innovation, raw_outputs["innovation"]),
-        "presentation": _format_report_text("presentation", presentation, raw_outputs["presentation"]),
-        "risk": _format_report_text("risk", risk, raw_outputs["risk"]),
-        "ppt": _format_report_text("presentation", presentation, raw_outputs["presentation"]),
+        "technical": _format_report_text("technical", technical, raw_outputs["technical"], raw_score_map, calibrated_score_map, calibration_reasons),
+        "security": _format_report_text("security", security, raw_outputs["security"], raw_score_map, calibrated_score_map, calibration_reasons),
+        "innovation": _format_report_text("innovation", innovation, raw_outputs["innovation"], raw_score_map, calibrated_score_map, calibration_reasons),
+        "presentation": _format_report_text("presentation", presentation, raw_outputs["presentation"], raw_score_map, calibrated_score_map, calibration_reasons),
+        "risk": _format_report_text("risk", risk, raw_outputs["risk"], raw_score_map, calibrated_score_map, calibration_reasons),
+        "ppt": _format_report_text("presentation", presentation, raw_outputs["presentation"], raw_score_map, calibrated_score_map, calibration_reasons),
         "impact": json.dumps(
-            {"impact_score": risk.impact_score, "top_risks": risk.top_risks},
+            {"impact_score": calibrated_score_map["impact"], "raw_impact_score": raw_score_map["impact"], "top_risks": risk.top_risks},
             indent=2,
         ),
         "failure": "\n".join(f"- {m}" for m in risk.failure_modes),
         "scalability": json.dumps(
             {
-                "scalability_score": innovation.scalability_score,
+                "scalability_score": calibrated_score_map["scalability"],
+                "raw_scalability_score": raw_score_map["scalability"],
                 "scalability_risk": innovation.scalability_risk,
             },
             indent=2,
@@ -543,6 +576,9 @@ def run_evaluation(
         "chief_evaluation": json.dumps(verdict_dict, indent=2),
         "verdict": verdict_dict,
         "raw_verdict": narrative_raw,
+        "raw_agent_outputs": raw_outputs,
+        "raw_agent_scores": raw_score_map,
+        "calibrated_agent_scores": calibrated_score_map,
         "agent_failures": failures,
         "evaluation_duration_sec": total_elapsed,
         "engineering": raw_outputs["technical"],

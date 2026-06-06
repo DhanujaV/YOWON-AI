@@ -14,6 +14,7 @@ export interface Evaluation {
   score: number | null
 
   findings: string
+  raw_score?: number | null
 
 }
 
@@ -60,6 +61,9 @@ export interface VerdictData {
   deployment_roadmap?: string[]
 
   agent_scores?: AgentScores
+  raw_agent_scores?: AgentScores
+  calibrated_agent_scores?: AgentScores
+  agent_calibration_reasons?: Record<string, string[]>
 
   executive_summary?: string
 
@@ -73,7 +77,7 @@ export interface VerdictData {
   scoring_weights?: Record<string, number>
   score_band?: string
   confidence?: number
-  penalties?: Array<{ factor: string; points: number }>
+  penalties?: Array<{ factor: string; points?: number; dimension?: string }>
   missing_evidence?: string[]
   positive_factors?: string[]
 
@@ -105,6 +109,8 @@ export interface ReportData {
   evaluations: Record<string, Evaluation>
 
   verdict_data?: VerdictData
+  raw_agent_scores?: AgentScores
+  calibrated_agent_scores?: AgentScores
 
 }
 

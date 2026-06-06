@@ -24,7 +24,7 @@ import { getDemoReport } from '../utils/demoData'
 import {
   getRadarData, computeConsensus, scoreColor,
 } from '../utils/reportParser'
-import type { Evaluation, ReportData } from '../types'
+import type { AgentScores, Evaluation, ReportData } from '../types'
 
 const AGENT_META: Record<string, { icon: ElementType; label: string; color: string }> = {
   engineering: { icon: Cpu, label: 'Engineering', color: '#A855F7' },
@@ -43,7 +43,7 @@ const AGENT_META: Record<string, { icon: ElementType; label: string; color: stri
   cross_exam: { icon: Activity, label: 'Cross Exam', color: '#8B5CF6' },
 }
 
-function AgentCard({ agentKey, evaluation }: { agentKey: string; evaluation: Evaluation }) {
+function AgentCard({ agentKey, evaluation, rawScore }: { agentKey: string; evaluation: Evaluation; rawScore?: number }) {
   const [expanded, setExpanded] = useState(false)
   const meta = AGENT_META[agentKey] || { icon: Shield, label: agentKey, color: '#64748B' }
   const Icon = meta.icon
@@ -78,6 +78,11 @@ function AgentCard({ agentKey, evaluation }: { agentKey: string; evaluation: Eva
                 <span className="text-xs font-mono" style={{ color: scoreColor(score) }}>
                   {score.toFixed(0)}/100
                 </span>
+                {rawScore != null && rawScore !== score && (
+                  <span className="text-[10px] font-mono text-sentinel-muted" title="Raw LLM score before evidence calibration">
+                    raw {rawScore.toFixed(0)}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -98,6 +103,14 @@ function AgentCard({ agentKey, evaluation }: { agentKey: string; evaluation: Eva
       )}
     </motion.div>
   )
+}
+
+function getRawAgentScore(scores: AgentScores | undefined, agentKey: string): number | undefined {
+  const dimension = agentKey === 'risk' ? 'impact' : agentKey
+  if (!['technical', 'security', 'scalability', 'innovation', 'presentation', 'impact'].includes(dimension)) {
+    return undefined
+  }
+  return scores?.[dimension as keyof AgentScores]
 }
 
 interface ReportPageProps {
@@ -280,7 +293,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               <p className="text-sm text-sentinel-muted mb-3">Calibration: <span className="text-amber-300">{vd?.score_band}</span></p>
               <div className="grid md:grid-cols-3 gap-4 text-sm">
                 <div><h3 className="text-emerald-300 mb-2">Positive factors</h3>{(vd?.positive_factors ?? []).map(x => <p key={x} className="text-sentinel-muted mb-1">+ {x}</p>)}</div>
-                <div><h3 className="text-amber-300 mb-2">Penalties</h3>{(vd?.penalties ?? []).map(x => <p key={x.factor} className="text-sentinel-muted mb-1">-{x.points} {x.factor}</p>)}</div>
+                <div><h3 className="text-amber-300 mb-2">Penalties</h3>{(vd?.penalties ?? []).map(x => <p key={`${x.dimension}-${x.factor}`} className="text-sentinel-muted mb-1">{x.dimension ? `${x.dimension}: ` : ''}{x.factor}{x.points != null ? ` (-${x.points})` : ''}</p>)}</div>
                 <div><h3 className="text-red-300 mb-2">Missing evidence</h3>{(vd?.missing_evidence ?? []).map(x => <p key={x} className="text-sentinel-muted mb-1">{x}</p>)}</div>
               </div>
             </div>
@@ -363,7 +376,12 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               </h2>
               <div className="space-y-3">
                 {Object.entries(report.evaluations).map(([key, ev]) => (
-                  <AgentCard key={key} agentKey={key} evaluation={ev} />
+                  <AgentCard
+                    key={key}
+                    agentKey={key}
+                    evaluation={ev}
+                    rawScore={getRawAgentScore(vd?.raw_agent_scores, key)}
+                  />
                 ))}
               </div>
             </div>

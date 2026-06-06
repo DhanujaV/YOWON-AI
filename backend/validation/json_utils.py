@@ -180,6 +180,7 @@ def validate_chief_verdict(
     for key in (
         "project_type", "evaluation_standard", "scoring_weights", "score_band",
         "confidence", "raw_weighted_score", "penalties", "missing_evidence", "positive_factors",
+        "raw_agent_scores", "calibrated_agent_scores", "agent_calibration_reasons",
     ):
         data[key] = computed.get(key)
     if computed.get("contradictions"):
@@ -223,6 +224,9 @@ def _computed_to_chief(computed: dict[str, Any]) -> ChiefVerdict:
         recommended_fixes=computed.get("recommended_fixes", []),
         deployment_roadmap=computed.get("deployment_roadmap", []),
         agent_scores=AgentScores(**computed["agent_scores"]),
+        raw_agent_scores=AgentScores(**computed.get("raw_agent_scores", computed["agent_scores"])),
+        calibrated_agent_scores=AgentScores(**computed.get("calibrated_agent_scores", computed["agent_scores"])),
+        agent_calibration_reasons=computed.get("agent_calibration_reasons", {}),
         project_type=computed.get("project_type", "Hackathon Project"),
         evaluation_standard=computed.get("evaluation_standard", ""),
         scoring_weights=computed.get("scoring_weights", {}),

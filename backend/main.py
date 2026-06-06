@@ -433,6 +433,11 @@ async def get_report(project_id: str, db: Session = Depends(get_db)):
             verdict_data = parsed
         else:
             logger.warning("Could not parse chief findings for project %s", project_id)
+    raw_scores = verdict_data.get("raw_agent_scores", {})
+    for agent_name, evaluation in eval_map.items():
+        dimension = "impact" if agent_name == "risk" else agent_name
+        if dimension in raw_scores:
+            evaluation["raw_score"] = raw_scores[dimension]
 
     return {
         "project_id": project_id,
@@ -447,6 +452,8 @@ async def get_report(project_id: str, db: Session = Depends(get_db)):
         "report_id": report.id if report else None,
         "evaluations": eval_map,
         "verdict_data": verdict_data,
+        "raw_agent_scores": raw_scores or verdict_data.get("agent_scores", {}),
+        "calibrated_agent_scores": verdict_data.get("calibrated_agent_scores", verdict_data.get("agent_scores", {})),
         "agent_failures": verdict_data.get("agent_failures") if verdict_data else {},
     }
 

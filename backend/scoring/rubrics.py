@@ -33,10 +33,13 @@ RUBRICS: dict[str, dict[str, Any]] = {
         "bands": {90: "Exceptional investment-ready pitch", 80: "Strong opportunity", 70: "Promising with validation gaps", 60: "Early concept", 0: "Needs major validation"},
     },
     "Research Project": {
-        "standard": "Novelty, methodology, reproducibility, evidence, and contribution to a literature gap",
-        "focus": ["novelty", "methodology", "reproducibility", "literature gap"],
-        "avoid_expectations": ["commercial deployment unless claimed"],
-        "weights": {"innovation": .30, "technical": .25, "presentation": .15, "impact": .20, "security": .05, "scalability": .05},
+        "standard": "Research novelty, academic contribution, experimental rigor, reproducibility, baseline benchmarking, and publication potential",
+        "focus": [
+            "novelty", "research contribution", "experimental rigor",
+            "reproducibility", "baseline benchmarking", "publication potential",
+        ],
+        "avoid_expectations": ["commercial deployment unless claimed", "large code volume", "UI polish"],
+        "weights": {"innovation": .35, "technical": .25, "impact": .25, "presentation": .10, "security": .03, "scalability": .02},
         "bands": {90: "Publication-grade contribution", 80: "Strong research project", 70: "Sound with revision needed", 60: "Preliminary study", 0: "Methodology needs improvement"},
     },
     "Corporate Project": {
@@ -69,8 +72,16 @@ def rubric_prompt(project_type: str | None) -> str:
     rubric = get_rubric(project_type)
     weights = ", ".join(f"{k}={int(v * 100)}%" for k, v in rubric["weights"].items())
     avoid = ", ".join(rubric["avoid_expectations"]) or "none"
+    research_rules = ""
+    if rubric["project_type"] == "Research Project":
+        research_rules = (
+            "\nRESEARCH_EVIDENCE_REQUIRED: baseline comparison, experimental results, "
+            "novel contribution, reproducibility details, and publication potential. "
+            "Do not reward code volume, deployment readiness, or UI polish as substitutes."
+        )
     return (
         f"PROJECT_TYPE: {rubric['project_type']}\nEVALUATION_STANDARD: {rubric['standard']}\n"
         f"FOCUS: {', '.join(rubric['focus'])}\nDO_NOT_EXPECT: {avoid}\nSCORING_WEIGHTS: {weights}\n"
         "Judge only against this context. Scores above 90 require exceptional explicit evidence."
+        f"{research_rules}"
     )

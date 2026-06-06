@@ -94,7 +94,9 @@ export function enrichReport(raw: ReportData): ReportData {
       ? extractJson(chief.findings)
       : null
 
-  const agentScores = buildAgentScores(parsed, raw.evaluations)
+  const agentScores = parsed?.calibrated_agent_scores
+    ?? raw.calibrated_agent_scores
+    ?? buildAgentScores(parsed, raw.evaluations)
 
   const verdict_data: VerdictData = {
     ...parsed,
@@ -114,6 +116,9 @@ export function enrichReport(raw: ReportData): ReportData {
         ? parsed.deployment_roadmap
         : extractBullets(chief?.findings ?? '', ['roadmap', 'deploy', 'phase', 'next step']),
     agent_scores: agentScores,
+    raw_agent_scores: parsed?.raw_agent_scores ?? raw.raw_agent_scores,
+    calibrated_agent_scores: agentScores,
+    agent_calibration_reasons: parsed?.agent_calibration_reasons ?? {},
     executive_summary: parsed?.executive_summary ?? extractSummary(chief?.findings ?? ''),
     top_strengths: parsed?.top_strengths?.length
       ? parsed.top_strengths

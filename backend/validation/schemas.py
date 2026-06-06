@@ -66,6 +66,9 @@ class ChiefVerdict(BaseModel):
     recommended_fixes: list[str] = Field(default_factory=list)
     deployment_roadmap: list[str] = Field(default_factory=list)
     agent_scores: AgentScores
+    raw_agent_scores: AgentScores
+    calibrated_agent_scores: AgentScores
+    agent_calibration_reasons: dict[str, list[str]] = Field(default_factory=dict)
     project_type: str = "Hackathon Project"
     evaluation_standard: str = ""
     scoring_weights: dict[str, float] = Field(default_factory=dict)
