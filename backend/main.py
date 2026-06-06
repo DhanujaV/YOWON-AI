@@ -218,14 +218,19 @@ def _run_evaluation_background(project_id: str) -> None:
 
         score_map = _agent_score_map(verdict)
 
-        agent_output_map = {
-            "technical": results.get("technical", ""),
-            "security": results.get("security", ""),
-            "presentation": results.get("presentation", ""),
-            "innovation": results.get("innovation", ""),
-            "risk": results.get("risk", ""),
-            "chief_evaluation": results.get("chief_evaluation", ""),
-        }
+        if results.get("rejection_report"):
+            agent_output_map = {
+                "chief_evaluation": results.get("chief_evaluation", ""),
+            }
+        else:
+            agent_output_map = {
+                "technical": results.get("technical", ""),
+                "security": results.get("security", ""),
+                "presentation": results.get("presentation", ""),
+                "innovation": results.get("innovation", ""),
+                "risk": results.get("risk", ""),
+                "chief_evaluation": results.get("chief_evaluation", ""),
+            }
 
         for agent_name, output_text in agent_output_map.items():
             db.add(

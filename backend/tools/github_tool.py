@@ -17,6 +17,22 @@ from typing import Any
 from github import Github, GithubException
 from config import GITHUB_TOKEN, MAX_GITHUB_FILE_BYTES
 
+SOURCE_EXTENSIONS = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rs", ".cpp", ".c", ".cs",
+    ".php", ".rb", ".swift", ".kt", ".scala", ".sql", ".ipynb",
+}
+DOC_EXTENSIONS = {".md", ".rst", ".txt", ".pdf", ".doc", ".docx"}
+PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".key"}
+CONFIG_FILENAMES = {
+    "package.json", "requirements.txt", "requirements-dev.txt", "pyproject.toml",
+    "pom.xml", "build.gradle", "go.mod", "cargo.toml", "gemfile", "pipfile",
+    "tsconfig.json", "vite.config.ts", "docker-compose.yml",
+}
+DEPLOYMENT_TERMS = (
+    "dockerfile", "docker-compose.yml", "vercel.json", "netlify.toml", "render.yaml",
+    "procfile", "kubernetes", "k8s", "helm", "terraform", ".github", "deploy",
+)
+
 
 def _github_client() -> Github:
     """Return an authenticated (or anonymous) PyGithub client."""
@@ -39,6 +55,50 @@ def _repo_name_from_url(url: str) -> str:
     if not match:
         raise ValueError(f"Cannot parse GitHub repo from URL: {url!r}")
     return match.group(1)
+
+
+def _suffix(path: str) -> str:
+    name = path.lower().split("/")[-1]
+    if "." not in name:
+        return ""
+    return "." + name.rsplit(".", 1)[-1]
+
+
+def _build_repository_statistics(file_paths: list[str]) -> dict[str, int]:
+    lower = [path.lower() for path in file_paths]
+    code = [p for p in lower if _suffix(p) in SOURCE_EXTENSIONS]
+    docs = [p for p in lower if _suffix(p) in DOC_EXTENSIONS or "readme" in p or "/docs/" in p]
+    presentations = [p for p in lower if _suffix(p) in PRESENTATION_EXTENSIONS]
+    tests = [p for p in lower if any(term in p for term in ("test", "spec", "__tests__"))]
+    configs = [
+        p for p in lower
+        if p.split("/")[-1] in CONFIG_FILENAMES
+        or _suffix(p) in {".json", ".toml", ".yml", ".yaml", ".ini", ".cfg"}
+    ]
+    deployments = [p for p in lower if any(term in p for term in DEPLOYMENT_TERMS)]
+    source_modules = {p.split("/")[0] for p in code if "/" in p} | {p.rsplit(".", 1)[0] for p in code}
+    meaningful = set(code + docs + presentations + tests + configs + deployments)
+    completeness = min(
+        100,
+        min(35, len(code) * 7)
+        + min(15, len(docs) * 8)
+        + min(15, len(tests) * 8)
+        + min(10, len(configs) * 4)
+        + min(10, len(deployments) * 10)
+        + min(15, len(source_modules) * 4),
+    )
+    return {
+        "total_files": len(file_paths),
+        "code_files": len(code),
+        "documentation_files": len(docs),
+        "presentation_files": len(presentations),
+        "test_files": len(tests),
+        "configuration_files": len(configs),
+        "deployment_files": len(deployments),
+        "source_modules": len(source_modules),
+        "meaningful_files": len(meaningful),
+        "repository_completeness_score": completeness,
+    }
 
 
 def extract_github_data(github_url: str) -> dict[str, Any]:
@@ -67,6 +127,8 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
         "topics": repo.get_topics(),
         "readme": "",
         "folder_structure": [],
+        "repository_files": [],
+        "repository_statistics": {},
         "dependencies": {},
         "python_files": [],
     }
@@ -82,6 +144,7 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
     try:
         root_contents = repo.get_contents("")
         structure: list[str] = []
+        file_paths: list[str] = []
         queue = list(root_contents)
         depth_map: dict[str, int] = {item.path: 1 for item in root_contents}
 
@@ -90,7 +153,9 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
             depth = depth_map.get(item.path, 1)
             prefix = "  " * (depth - 1)
             icon = "📁" if item.type == "dir" else "📄"
-            structure.append(f"{prefix}{icon} {item.name}")
+            structure.append(f"{prefix}{icon} {item.path}")
+            if item.type == "file":
+                file_paths.append(item.path)
 
             if item.type == "dir" and depth < 2:
                 try:
@@ -102,6 +167,8 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
                     pass
 
         result["folder_structure"] = structure[:200]  # Cap at 200 entries
+        result["repository_files"] = file_paths[:500]
+        result["repository_statistics"] = _build_repository_statistics(file_paths)
     except GithubException:
         pass
 

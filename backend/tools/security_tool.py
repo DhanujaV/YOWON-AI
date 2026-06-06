@@ -24,10 +24,24 @@ SECRET_PATTERNS: list[tuple[str, str]] = [
     (r"(?i)password\s*[:=]\s*['\"][^'\"]{6,}['\"]", "Hardcoded password"),
     (r"(?i)token\s*[:=]\s*['\"][\w\-]{20,}['\"]", "Hardcoded token"),
     (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
+    (r"ghp_[A-Za-z0-9]{36,}", "GitHub personal access token"),
+    (r"sk-[A-Za-z0-9]{32,}", "OpenAI-style API key"),
+    (r"AIza[0-9A-Za-z\-_]{35}", "Google API key"),
+    (r"eyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}", "JWT token"),
     (r"(?i)private[_\s]?key\s*[:=]", "Private key reference"),
+    (r"-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----", "Private key material"),
     (r"mongodb(\+srv)?://[^\"'\s]+", "MongoDB connection string with credentials"),
     (r"postgres://[^\"'\s]+:[^\"'\s]+@", "PostgreSQL connection string with credentials"),
 ]
+
+KNOWN_RISKY_DEPENDENCIES = {
+    "django==1.": "Legacy Django 1.x has known security exposure",
+    "flask==0.": "Legacy Flask 0.x is outdated",
+    "requests==2.19": "Old requests release with historical CVEs",
+    "urllib3==1.24": "Old urllib3 release with historical CVEs",
+    "lodash@4.17.20": "lodash 4.17.20 has known vulnerabilities",
+    "minimist@0.0.8": "minimist 0.0.8 has prototype pollution vulnerabilities",
+}
 
 
 def _detect_secrets(code: str, filename: str = "unknown") -> list[dict]:
@@ -104,6 +118,24 @@ def _check_dependencies(dep_files: dict[str, str]) -> list[dict]:
                 "issue": f"Unpinned dependency: {line!r}",
                 "severity": "LOW",
             })
+        lowered = line.lower()
+        for pattern, issue in KNOWN_RISKY_DEPENDENCIES.items():
+            if pattern in lowered:
+                warnings.append({
+                    "file": "requirements.txt",
+                    "issue": issue,
+                    "severity": "HIGH",
+                })
+
+    package_content = dep_files.get("package.json", "") + "\n" + dep_files.get("package-lock.json", "")
+    lowered_pkg = package_content.lower().replace('"', "")
+    for pattern, issue in KNOWN_RISKY_DEPENDENCIES.items():
+        if "@" in pattern and pattern in lowered_pkg:
+            warnings.append({
+                "file": "package.json",
+                "issue": issue,
+                "severity": "HIGH",
+            })
 
     return warnings
 
@@ -139,6 +171,7 @@ def run_security_analysis(
     # ── Compute overall risk level ────────────────────────────────────────
     critical_count = sum(1 for i in bandit_issues if i.get("severity") == "HIGH")
     critical_count += len(secret_findings)
+    critical_count += sum(1 for i in dep_warnings if i.get("severity") == "HIGH")
 
     if critical_count >= 5:
         risk = "CRITICAL"

@@ -38,7 +38,13 @@ from llm_utils import (
 )
 from logging_config import get_logger, timed_operation
 from progress import agent_complete, agent_start
-from scoring.score_engine import build_evidence_profile, compute_overall, detect_contradictions, format_cross_exam
+from scoring.score_engine import (
+    build_empty_repository_rejection,
+    build_evidence_profile,
+    compute_overall,
+    detect_contradictions,
+    format_cross_exam,
+)
 from tasks.evaluation_tasks import (
     create_chief_evaluation_task,
     create_narrative_task,
@@ -356,6 +362,45 @@ def run_evaluation(
         duration_sec=round(time.perf_counter() - brief_start, 2),
         message=f"[COORDINATOR] Context brief ready ({len(brief_text)} chars)",
     )
+
+    early_evidence = build_evidence_profile(ctx)
+    if early_evidence.get("empty_repository"):
+        verdict_dict = build_empty_repository_rejection(ctx, early_evidence)
+        total_elapsed = round(time.perf_counter() - eval_start, 2)
+        agent_start(project_id, "scoring", message="[SCORE] Empty repository rejection gate")
+        agent_complete(
+            project_id,
+            "scoring",
+            duration_sec=0,
+            message="[SCORE] Rejected: Repository contains no evaluable content.",
+        )
+        rejection_json = json.dumps(verdict_dict, indent=2)
+        return {
+            "brief": brief_text,
+            "technical": "",
+            "security": "",
+            "innovation": "",
+            "presentation": "",
+            "risk": "",
+            "ppt": "",
+            "impact": rejection_json,
+            "failure": "Repository contains no evaluable content.",
+            "scalability": "",
+            "cross_exam": "Evaluation stopped before agent execution: repository contains no evaluable content.",
+            "chief_evaluation": rejection_json,
+            "verdict": verdict_dict,
+            "raw_verdict": rejection_json,
+            "raw_agent_outputs": {},
+            "raw_agent_scores": verdict_dict["raw_agent_scores"],
+            "calibrated_agent_scores": verdict_dict["calibrated_agent_scores"],
+            "agent_failures": {},
+            "evaluation_duration_sec": total_elapsed,
+            "rejection_report": True,
+            "engineering": "",
+            "innovation_scalability": "",
+            "risk_impact": "",
+            "coordination": brief_text,
+        }
 
     jobs = [
         ("technical", create_technical_agent, create_technical_task, TechnicalReport),

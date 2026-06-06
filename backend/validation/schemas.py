@@ -74,8 +74,13 @@ class ChiefVerdict(BaseModel):
     scoring_weights: dict[str, float] = Field(default_factory=dict)
     score_band: str = ""
     confidence: int = Field(ge=0, le=100, default=0)
+    confidence_explanation: str = ""
+    repository_statistics: dict[str, int] = Field(default_factory=dict)
+    repository_completeness_score: int = Field(ge=0, le=100, default=0)
+    evidence_quality: str = ""
     raw_weighted_score: int = 0
     penalties: list[dict] = Field(default_factory=list)
+    calibration_adjustments: list[dict] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
     positive_factors: list[str] = Field(default_factory=list)
 
