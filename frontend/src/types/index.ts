@@ -77,7 +77,12 @@ export interface VerdictData {
   scoring_weights?: Record<string, number>
   score_band?: string
   confidence?: number
+  confidence_explanation?: string
+  repository_statistics?: Record<string, number>
+  repository_completeness_score?: number
+  evidence_quality?: string
   penalties?: Array<{ factor: string; points?: number; dimension?: string }>
+  calibration_adjustments?: Array<{ factor: string; points?: number; dimension?: string }>
   missing_evidence?: string[]
   positive_factors?: string[]
 

@@ -279,6 +279,23 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               <h2 className="font-display font-bold text-xl mb-4">Evaluation Context</h2>
               <p className="text-sm text-sentinel-muted mb-2"><span className="text-sentinel-text">Project Type:</span> {vd?.project_type ?? report.project_type}</p>
               <p className="text-sm text-sentinel-muted mb-4"><span className="text-sentinel-text">Evaluation Standard:</span> {vd?.evaluation_standard}</p>
+              <div className="grid sm:grid-cols-3 gap-3 mb-4">
+                <div className="border border-white/5 rounded-lg p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-sentinel-muted">Score Band</p>
+                  <p className="text-sm text-amber-300 mt-1">{vd?.score_band ?? 'Unknown'}</p>
+                </div>
+                <div className="border border-white/5 rounded-lg p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-sentinel-muted">Evidence Quality</p>
+                  <p className="text-sm text-violet-300 mt-1">{vd?.evidence_quality ?? 'Unknown'}</p>
+                </div>
+                <div className="border border-white/5 rounded-lg p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-sentinel-muted">Completeness</p>
+                  <p className="text-sm text-emerald-300 mt-1">{vd?.repository_completeness_score ?? 0}/100</p>
+                </div>
+              </div>
+              {vd?.confidence_explanation && (
+                <p className="text-sm text-sentinel-muted mb-4"><span className="text-sentinel-text">Confidence:</span> {vd.confidence_explanation}</p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {Object.entries(vd?.scoring_weights ?? {}).map(([name, weight]) => (
                   <span key={name} className="glass-pill px-3 py-1 text-xs font-mono text-violet-300">
@@ -288,6 +305,22 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               </div>
             </div>
 
+            {vd?.repository_statistics && Object.keys(vd.repository_statistics).length > 0 && (
+              <div className="glass-card">
+                <h2 className="font-display font-bold text-xl mb-4">Repository Statistics</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {Object.entries(vd.repository_statistics).map(([name, value]) => (
+                    <div key={name} className="border border-white/5 rounded-lg p-3">
+                      <p className="text-[10px] font-mono uppercase tracking-widest text-sentinel-muted">
+                        {name.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-lg font-mono text-sentinel-text mt-1">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="glass-card border border-amber-500/20">
               <h2 className="font-display font-bold text-xl mb-4">Why did this project receive this score?</h2>
               <p className="text-sm text-sentinel-muted mb-3">Calibration: <span className="text-amber-300">{vd?.score_band}</span></p>
@@ -296,6 +329,16 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                 <div><h3 className="text-amber-300 mb-2">Penalties</h3>{(vd?.penalties ?? []).map(x => <p key={`${x.dimension}-${x.factor}`} className="text-sentinel-muted mb-1">{x.dimension ? `${x.dimension}: ` : ''}{x.factor}{x.points != null ? ` (-${x.points})` : ''}</p>)}</div>
                 <div><h3 className="text-red-300 mb-2">Missing evidence</h3>{(vd?.missing_evidence ?? []).map(x => <p key={x} className="text-sentinel-muted mb-1">{x}</p>)}</div>
               </div>
+              {(vd?.calibration_adjustments ?? []).length > 0 && (
+                <div className="mt-5 pt-5 border-t border-white/5">
+                  <h3 className="text-amber-300 mb-2 text-sm">Calibration Adjustments</h3>
+                  {(vd?.calibration_adjustments ?? []).slice(0, 8).map(x => (
+                    <p key={`${x.dimension}-${x.factor}`} className="text-sentinel-muted text-sm mb-1">
+                      {x.dimension ? `${x.dimension}: ` : ''}{x.factor}{x.points != null ? ` (-${x.points})` : ''}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Analytics row */}

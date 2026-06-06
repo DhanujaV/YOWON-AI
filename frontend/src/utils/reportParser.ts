@@ -132,7 +132,12 @@ export function enrichReport(raw: ReportData): ReportData {
     scoring_weights: parsed?.scoring_weights ?? {},
     score_band: parsed?.score_band,
     confidence: parsed?.confidence ?? 0,
+    confidence_explanation: parsed?.confidence_explanation,
+    repository_statistics: parsed?.repository_statistics ?? {},
+    repository_completeness_score: parsed?.repository_completeness_score ?? 0,
+    evidence_quality: parsed?.evidence_quality,
     penalties: parsed?.penalties ?? [],
+    calibration_adjustments: parsed?.calibration_adjustments ?? parsed?.penalties ?? [],
     missing_evidence: parsed?.missing_evidence ?? [],
     positive_factors: parsed?.positive_factors ?? [],
   }
