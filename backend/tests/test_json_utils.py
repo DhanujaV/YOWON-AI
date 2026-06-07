@@ -3,7 +3,7 @@
 import json
 
 from validation.json_utils import extract_json, parse_agent_json
-from validation.schemas import TechnicalReport
+from validation.schemas import ChiefVerdict, TechnicalReport
 
 FALLBACK = {
     "technical_score": 35,
@@ -54,3 +54,29 @@ def test_parse_agent_llm_success():
     report, source = parse_agent_json(json.dumps(payload), TechnicalReport, FALLBACK, label="test")
     assert source == "llm"
     assert report.technical_score == 81
+
+
+def test_chief_verdict_string_roadmap_is_not_split_into_characters():
+    scores = {
+        "technical": 70,
+        "security": 70,
+        "scalability": 70,
+        "innovation": 70,
+        "presentation": 70,
+        "impact": 70,
+    }
+    verdict = ChiefVerdict(
+        overall_score=70,
+        risk_level="MEDIUM",
+        verdict="IMPROVE",
+        agent_scores=scores,
+        raw_agent_scores=scores,
+        calibrated_agent_scores=scores,
+        deployment_roadmap="Phase 1\n- Improve test coverage\nPhase 2\n- Harden security",
+    )
+    assert verdict.deployment_roadmap == [
+        "Phase 1",
+        "Improve test coverage",
+        "Phase 2",
+        "Harden security",
+    ]

@@ -14,6 +14,8 @@ class EvaluationBrief:
     available_inputs: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     red_flags: list[str] = field(default_factory=list)
+    repository_metrics: dict[str, int] = field(default_factory=dict)
+    evidence_summary: list[str] = field(default_factory=list)
     security_risk: str = "UNKNOWN"
 
     def to_text(self) -> str:
@@ -24,6 +26,17 @@ class EvaluationBrief:
             f"MISSING INFORMATION: {', '.join(self.missing) or 'none'}",
             f"STATIC SECURITY RISK: {self.security_risk}",
         ]
+        if self.repository_metrics:
+            metric_text = ", ".join(
+                f"{key}={value}" for key, value in self.repository_metrics.items()
+                if key in {
+                    "total_files", "code_files", "documentation_files", "test_files",
+                    "configuration_files", "deployment_files", "data_files", "meaningful_files",
+                }
+            )
+            lines.append(f"REPOSITORY METRICS: {metric_text}")
+        if self.evidence_summary:
+            lines.append("SHARED EVIDENCE SUMMARY: " + "; ".join(self.evidence_summary))
         if self.red_flags:
             lines.append("RED FLAGS: " + "; ".join(self.red_flags))
         return "\n".join(lines)
@@ -35,6 +48,7 @@ def build_brief(ctx: dict[str, Any]) -> EvaluationBrief:
     red_flags: list[str] = []
 
     gh = ctx.get("github") or {}
+    metrics = gh.get("repository_statistics") or {}
     if gh and not gh.get("error"):
         available.append("source code")
     else:
@@ -49,6 +63,19 @@ def build_brief(ctx: dict[str, Any]) -> EvaluationBrief:
 
     if ctx.get("description"):
         available.append("project description")
+
+    evidence_summary: list[str] = []
+    if metrics:
+        if metrics.get("documentation_files", 0) > 0:
+            evidence_summary.append("documentation present")
+        if metrics.get("test_files", 0) > 0:
+            evidence_summary.append("tests present")
+        if metrics.get("deployment_files", 0) > 0:
+            evidence_summary.append("deployment files present")
+        if metrics.get("data_files", 0) > 0:
+            evidence_summary.append("data files present")
+        if metrics.get("source_modules", 0) >= 2:
+            evidence_summary.append("modular source structure")
 
     sec = ctx.get("security") or {}
     risk = sec.get("risk_level", "UNKNOWN")
@@ -69,5 +96,7 @@ def build_brief(ctx: dict[str, Any]) -> EvaluationBrief:
         available_inputs=available,
         missing=missing,
         red_flags=red_flags,
+        repository_metrics=metrics,
+        evidence_summary=evidence_summary,
         security_risk=risk,
     )

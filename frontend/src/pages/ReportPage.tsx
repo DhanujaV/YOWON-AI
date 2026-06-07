@@ -227,7 +227,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
           >
             <p className="text-red-300 font-display font-semibold">Insufficient Evidence</p>
             <p className="text-sentinel-muted text-sm mt-1">
-              {vd.final_reason || 'Repository contains no evaluable content.'}
+              No meaningful project files detected. Repository cannot be evaluated.
             </p>
           </motion.div>
         )}

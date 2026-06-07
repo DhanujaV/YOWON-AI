@@ -26,6 +26,7 @@ SOURCE_EXTENSIONS = {
 }
 DOC_EXTENSIONS = {".md", ".rst", ".txt", ".pdf", ".doc", ".docx"}
 PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".key"}
+DATA_EXTENSIONS = {".csv", ".tsv", ".jsonl", ".parquet", ".pkl", ".pickle", ".npy", ".npz", ".xlsx", ".xls", ".db", ".sqlite"}
 CONFIG_FILENAMES = {
     "package.json", "requirements.txt", "requirements-dev.txt", "pyproject.toml",
     "pom.xml", "build.gradle", "go.mod", "cargo.toml", "gemfile", "pipfile",
@@ -39,6 +40,8 @@ ARCHITECTURE_TERMS = ("architecture", "design", "system design", "component", "m
 SECURITY_TERMS = ("auth", "jwt", "oauth", "permission", "rbac", "sanitize", "csrf", "cors", "secret", "encrypt", "hash")
 IMPACT_TERMS = ("adoption", "user", "customer", "metric", "outcome", "deployed", "pilot", "traction", "revenue", "impact")
 BUSINESS_TERMS = ("market", "customer", "revenue", "business model", "pricing", "competitor", "tam", "sam", "som", "traction")
+ML_TERMS = ("tensorflow", "torch", "pytorch", "sklearn", "scikit", "keras", "xgboost", "opencv", "nlp", "classifier", "recommendation", "recommender", "machine learning", "deep learning", "model")
+API_TERMS = ("fastapi", "flask", "django", "express", "router", "endpoint", "api", "controller")
 
 
 def _clean_structure_item(item: str) -> str:
@@ -59,7 +62,7 @@ def _repository_statistics(ctx: dict[str, Any]) -> dict[str, int]:
         defaults = {
             "total_files": 0, "code_files": 0, "documentation_files": 0,
             "presentation_files": 0, "test_files": 0, "configuration_files": 0,
-            "deployment_files": 0, "source_modules": 0, "meaningful_files": 0,
+            "deployment_files": 0, "data_files": 0, "source_modules": 0, "meaningful_files": 0,
             "repository_completeness_score": 0,
         }
         return {key: int(supplied.get(key, defaults[key]) or 0) for key in defaults}
@@ -71,6 +74,7 @@ def _repository_statistics(ctx: dict[str, Any]) -> dict[str, int]:
     docs = [x for x in lower if _suffix(x) in DOC_EXTENSIONS or "readme" in x or "docs" in x]
     presentations = [x for x in lower if _suffix(x) in PRESENTATION_EXTENSIONS]
     tests = [x for x in lower if any(t in x for t in ("test", "spec", "__tests__"))]
+    data = [x for x in lower if _suffix(x) in DATA_EXTENSIONS or "/data/" in x or x.startswith("data/")]
     configs = [x for x in lower if x.split("/")[-1] in CONFIG_FILENAMES or _suffix(x) in {".json", ".toml", ".yml", ".yaml", ".ini", ".cfg"}]
     deployments = [x for x in lower if any(term in x for term in DEPLOYMENT_NAMES)]
     modules = {x.split("/")[0] for x in code_files if "/" in x} | {x.rsplit(".", 1)[0] for x in code_files}
@@ -82,9 +86,44 @@ def _repository_statistics(ctx: dict[str, Any]) -> dict[str, int]:
         "test_files": len(tests),
         "configuration_files": len(configs) or len(gh.get("dependencies") or {}),
         "deployment_files": len(deployments),
+        "data_files": len(data),
         "source_modules": len(modules),
-        "meaningful_files": len(set(code_files + docs + presentations + tests + configs + deployments)),
+        "meaningful_files": len(set(code_files + docs + presentations + tests + configs + deployments + data)),
     }
+
+
+def _repository_file_list(ctx: dict[str, Any]) -> list[str]:
+    gh = ctx.get("github") or {}
+    files = gh.get("repository_files") or []
+    if files:
+        return [str(item).replace("\\", "/").lower() for item in files]
+    return [
+        _clean_structure_item(item).replace("\\", "/").lower()
+        for item in gh.get("folder_structure") or []
+        if "." in str(item).split("/")[-1]
+    ]
+
+
+def _only_readme_or_config(ctx: dict[str, Any], stats: dict[str, int]) -> bool:
+    files = _repository_file_list(ctx)
+    if not files:
+        return False
+    readme_files = [f for f in files if f.split("/")[-1].startswith("readme")]
+    gitignore_files = [f for f in files if f.split("/")[-1] == ".gitignore"]
+    config_like = [
+        f for f in files
+        if f.split("/")[-1] in CONFIG_FILENAMES
+        or _suffix(f) in {".json", ".toml", ".yml", ".yaml", ".ini", ".cfg"}
+    ]
+    allowed = set(readme_files + gitignore_files + config_like)
+    substantive = (
+        stats.get("code_files", 0)
+        + stats.get("presentation_files", 0)
+        + stats.get("test_files", 0)
+        + stats.get("deployment_files", 0)
+        + stats.get("data_files", 0)
+    )
+    return substantive == 0 and bool(files) and set(files).issubset(allowed)
 
 
 def _score_band(score: int) -> str:
@@ -110,8 +149,10 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     pdf_text = ((ctx.get("pdf") or {}).get("full_text") or "")
     ppt_text = ((ctx.get("ppt") or {}).get("full_text") or "")
     evidence_text = " ".join((description, readme, pdf_text, ppt_text, structure)).lower()
+    dependency_text = " ".join(str(v) for v in (gh.get("dependencies") or {}).values()).lower()
     has_repo = bool(gh and not gh.get("error"))
     stats = _repository_statistics(ctx)
+    has_report_document = bool((pdf_text and len(pdf_text) > 80) or (ppt_text and len(ppt_text) > 80))
     has_documents = bool(
         stats["documentation_files"] or stats["presentation_files"]
         or len(readme) > 80 or (pdf_text and len(pdf_text) > 80) or (ppt_text and len(ppt_text) > 80)
@@ -119,7 +160,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     has_meaningful_text = len(description.strip()) > 80 or has_documents
     repository_has_content = has_repo and bool(
         stats["code_files"] or stats["documentation_files"] or stats["presentation_files"]
-        or stats["configuration_files"] or stats["deployment_files"]
+        or stats["deployment_files"] or stats.get("data_files", 0)
         or (readme and readme != "[No README found]" and len(readme.strip()) > 80)
     )
     source_code_exists = stats["code_files"] > 0 or bool(gh.get("python_files"))
@@ -134,6 +175,8 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     )
     no_critical_security = not sec.get("secret_findings") and sec.get("risk_level", "LOW") != "CRITICAL"
     novelty = any(x in evidence_text for x in ("novel", "novelty", "differentiator", "unique", "original", "new approach"))
+    ml_evidence = any(x in (evidence_text + " " + dependency_text) for x in ML_TERMS)
+    api_evidence = any(x in (evidence_text + " " + dependency_text) for x in API_TERMS)
     differentiation = any(x in evidence_text for x in ("competitor", "alternative", "different", "differentiation", "vs ", "compared with"))
     outcomes = any(x in evidence_text for x in IMPACT_TERMS)
     adoption = any(x in evidence_text for x in ("users", "customers", "stars", "downloads", "pilot", "adoption", "traction"))
@@ -149,9 +192,9 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "dependency_analysis": security_evidence and (stats["configuration_files"] > 0 or bool(gh.get("dependencies"))),
         "security_practices": security_evidence and any(x in evidence_text for x in SECURITY_TERMS),
         "no_critical_findings": no_critical_security,
-        "innovation_evidence": novelty or differentiation or bool(gh.get("topics")),
-        "novelty_evidence": novelty,
-        "differentiation_evidence": differentiation,
+        "innovation_evidence": novelty or differentiation or ml_evidence or bool(gh.get("topics")),
+        "novelty_evidence": novelty or ml_evidence,
+        "differentiation_evidence": differentiation or ml_evidence,
         "impact_evidence": outcomes,
         "adoption_evidence": adoption or int(gh.get("stars") or 0) > 0 or int(gh.get("forks") or 0) > 0,
         "real_world_value": outcomes or any(x in evidence_text for x in ("problem", "workflow", "saves", "reduces", "improves")),
@@ -163,14 +206,17 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "business_model": any(x in evidence_text for x in ("business model", "pricing", "revenue", "subscription", "gtm", "go-to-market")),
         "competitive_analysis": any(x in evidence_text for x in ("competitor", "competitive", "alternative", "market map")),
         "contribution_readiness": any(x in evidence_text for x in ("contributing", "code of conduct", "issue template", "pull request", "license")),
+        "ml_evidence": ml_evidence,
+        "api_evidence": api_evidence,
     }
     evaluable_files = (
         stats["meaningful_files"]
         + stats["code_files"]
         + stats["documentation_files"]
         + stats["presentation_files"]
+        + stats.get("data_files", 0)
     )
-    empty_repository = evaluable_files == 0 and not has_meaningful_text
+    empty_repository = (evaluable_files == 0 and not has_meaningful_text) or _only_readme_or_config(ctx, stats)
     available = sum((repository_has_content, bool(description.strip()), bool(ctx.get("pdf")), bool(ctx.get("ppt")), security_evidence))
     repository_coverage = min(100, stats["repository_completeness_score"] if "repository_completeness_score" in stats else (
         min(35, stats["code_files"] * 6)
@@ -178,6 +224,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         + min(15, stats["test_files"] * 8)
         + min(15, stats["configuration_files"] * 5)
         + min(15, stats["deployment_files"] * 10)
+        + min(8, stats.get("data_files", 0) * 4)
     ))
     completeness_score = min(
         100,
@@ -186,6 +233,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         + min(15, stats["test_files"] * 8)
         + min(10, stats["configuration_files"] * 4)
         + min(10, stats["deployment_files"] * 10)
+        + min(8, stats.get("data_files", 0) * 4)
         + (10 if checks["architecture"] else 0)
         + (5 if security_evidence else 0),
     )
@@ -209,6 +257,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "small_academic_project": 4 <= stats["meaningful_files"] <= 15 and rubric_like_academic(ctx.get("project_type")),
         "complete_project": completeness_score >= 75 and stats["code_files"] >= 4 and checks["documentation"] and checks["tests"],
         "incomplete_project": not checks["source_code"] and not checks["documentation"],
+        "has_report_document": has_report_document,
         "data_availability": round(available / 5 * 100),
         "repository_coverage": repository_coverage,
         "repository_completeness_score": completeness_score,
@@ -228,6 +277,8 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
     return {
         "status": "INSUFFICIENT_EVIDENCE",
         "overall_score": 0,
+        "readiness": 0,
+        "readiness_score": 0,
         "raw_weighted_score": 0,
         "verdict": "REJECT",
         "risk_level": "CRITICAL",
@@ -239,8 +290,8 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
         "evaluation_standard": get_rubric(ctx.get("project_type"))["standard"],
         "scoring_weights": get_rubric(ctx.get("project_type"))["weights"],
         "score_band": "Incomplete",
-        "confidence": min(19, _confidence(zero_scores, evidence)),
-        "confidence_explanation": "Confidence is very low because the repository has no source, documents, presentations, or meaningful context.",
+        "confidence": 0,
+        "confidence_explanation": "Confidence is 0 because no meaningful project files were detected.",
         "repository_statistics": evidence.get("repository_statistics", {}),
         "repository_completeness_score": 0,
         "evidence_quality": "Incomplete",
@@ -250,7 +301,7 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
         "blocking_issues": [reason],
         "top_strengths": [],
         "top_weaknesses": [reason],
-        "executive_summary": "Evaluation rejected before agent execution. Repository contains no evaluable content.",
+        "executive_summary": "REJECT - INSUFFICIENT PROJECT CONTENT. Evaluation stopped before scoring because no meaningful project files were detected.",
         "final_reason": reason,
         "recommended_fixes": ["Add source code, documentation, or presentation material before re-running evaluation."],
         "deployment_roadmap": ["Add evaluable project content", "Re-submit for Sentinel evaluation"],
@@ -294,11 +345,15 @@ def calibrate_agent_scores(
         cap("security", 30, "No security evidence: security score capped at 30")
     if not checks.get("no_critical_findings"):
         cap("security", 60, "Critical/high security findings prevent high security score")
-    if not checks.get("presentation_material"):
-        cap("presentation", 10, "No presentation or strong documentation evidence: presentation score capped at 10")
-    if not checks.get("innovation_evidence") or not checks.get("novelty_evidence") or not checks.get("differentiation_evidence"):
+    if not checks.get("presentation_material") and not checks.get("documentation"):
+        cap("presentation", 10, "No presentation or documentation evidence: presentation score capped at 10")
+    if project_type != "University Project" and (
+        not checks.get("innovation_evidence") or not checks.get("novelty_evidence") or not checks.get("differentiation_evidence")
+    ):
         cap("innovation", 30, "No novelty/differentiation evidence: innovation score capped at 30")
-    if not checks.get("impact_evidence") or not checks.get("adoption_evidence") or not checks.get("real_world_value"):
+    if project_type not in ("University Project", "Research Project") and (
+        not checks.get("impact_evidence") or not checks.get("adoption_evidence") or not checks.get("real_world_value")
+    ):
         cap("impact", 30, "No measurable impact/adoption/value evidence: impact score capped at 30")
     if not evidence.get("repository_has_content"):
         cap("technical", 20, "No substantive repository evidence")
@@ -358,6 +413,23 @@ def calibrate_agent_scores(
     if project_type == "University Project" and not checks.get("deployment"):
         for dimension in ("technical", "scalability", "impact"):
             reasons[dimension].append("University rubric: missing deployment is not heavily penalized")
+    if project_type == "University Project":
+        if checks.get("ml_evidence"):
+            scores["innovation"] = max(scores["innovation"], min(70, scores["innovation"] + 12))
+            reasons["innovation"].append("University rubric: applied AI/ML implementation counts as innovation")
+        if checks.get("real_world_value") or checks.get("source_code"):
+            scores["impact"] = max(scores["impact"], min(70, scores["impact"] + 10))
+            reasons["impact"].append("University rubric: practical usefulness counts as impact without adoption metrics")
+        if checks.get("documentation"):
+            scores["presentation"] = max(scores["presentation"], 35)
+            reasons["presentation"].append("README/documentation evidence establishes presentation floor")
+
+    if checks.get("documentation"):
+        scores["presentation"] = max(scores["presentation"], 20)
+    if checks.get("documentation") and evidence.get("repository_statistics", {}).get("documentation_files", 0) > 1:
+        scores["presentation"] = max(scores["presentation"], 35)
+    if evidence.get("has_report_document") or evidence.get("repository_statistics", {}).get("presentation_files", 0) > 0:
+        scores["presentation"] = max(scores["presentation"], 45)
 
     return scores, reasons
 
@@ -427,6 +499,7 @@ def compute_overall(
     label = _score_band(overall)
     confidence = _confidence(calibrated_scores, evidence)
     strengths = [f"Strong {k} ({v}/100)" for k, v in calibrated_scores.items() if v >= 80][:5]
+    positive_factors = _positive_factors(evidence, strengths)
     weaknesses = [f"Weak {k} ({v}/100)" for k, v in calibrated_scores.items() if v < 60][:5]
     missing = list(dict.fromkeys(p["factor"] for p in penalties if p["factor"].startswith(("No ", "Insufficient"))))
 
@@ -447,10 +520,34 @@ def compute_overall(
         "repository_completeness_score": evidence.get("repository_completeness_score", 0),
         "evidence_quality": evidence.get("evidence_quality", _score_band(evidence.get("repository_completeness_score", 0))),
         "calibration_adjustments": penalties,
-        "penalties": penalties, "missing_evidence": missing, "positive_factors": strengths,
+        "penalties": penalties, "missing_evidence": missing, "positive_factors": positive_factors,
         "blocking_issues": security.critical_findings[:3] if security.risk_level in ("HIGH", "CRITICAL") else [],
-        "top_strengths": strengths, "top_weaknesses": (weaknesses + missing)[:5],
+        "top_strengths": (strengths + positive_factors)[:5], "top_weaknesses": (weaknesses + missing)[:5],
     }
+
+
+def _positive_factors(evidence: dict[str, Any], score_strengths: list[str]) -> list[str]:
+    checks = evidence.get("checks", {})
+    stats = evidence.get("repository_statistics", {})
+    factors: list[str] = []
+    if stats.get("documentation_files", 0) > 0 or checks.get("documentation"):
+        factors.append("Documentation provided")
+    if checks.get("tests"):
+        factors.append("Automated testing detected")
+    if checks.get("ml_evidence"):
+        factors.append("Machine learning implementation")
+    if checks.get("api_evidence"):
+        factors.append("Backend architecture present")
+    if checks.get("deployment"):
+        factors.append("Deployment readiness evidence")
+    if checks.get("architecture") or stats.get("source_modules", 0) >= 2:
+        factors.append("Good project organization")
+    if stats.get("data_files", 0) > 0:
+        factors.append("Dataset or structured data included")
+    factors.extend(score_strengths)
+    if not factors and stats.get("meaningful_files", 0) > 0 and not evidence.get("empty_repository"):
+        factors.append("Meaningful project content detected")
+    return list(dict.fromkeys(factors))[:8]
 
 
 def _confidence(agent_map: dict[str, int], evidence: dict[str, Any]) -> int:
@@ -463,7 +560,7 @@ def _confidence(agent_map: dict[str, int], evidence: dict[str, Any]) -> int:
         + evidence.get("repository_completeness_score", 0) * .15
     )
     if evidence.get("empty_repository"):
-        return min(confidence, 19)
+        return 0
     if evidence.get("trivial_repository"):
         return min(confidence, 40)
     if evidence.get("tiny_incomplete_project"):

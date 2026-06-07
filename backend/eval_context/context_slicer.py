@@ -22,6 +22,18 @@ def _gh_excerpt(ctx: dict[str, Any], readme_limit: int = 900) -> str:
         f"Language: {gh.get('language', 'unknown')}",
         f"Stars: {gh.get('stars', 0)}",
     ]
+    stats = gh.get("repository_statistics") or {}
+    if stats:
+        parts.append(
+            "Repository metrics: "
+            + ", ".join(
+                f"{key}={value}" for key, value in stats.items()
+                if key in {
+                    "total_files", "code_files", "documentation_files", "test_files",
+                    "configuration_files", "deployment_files", "data_files", "meaningful_files",
+                }
+            )
+        )
     if gh.get("readme"):
         parts.append(f"README excerpt:\n{gh['readme'][:readme_limit]}")
     deps = gh.get("dependencies") or {}

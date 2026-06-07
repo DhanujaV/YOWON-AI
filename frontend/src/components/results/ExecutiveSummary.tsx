@@ -4,6 +4,7 @@ import {
   FileText, ThumbsUp, ThumbsDown, AlertOctagon, Wrench, Map,
 } from 'lucide-react'
 import type { VerdictData } from '../../types'
+import { normalizeDisplayList } from '../../utils/listNormalizer'
 
 interface ExecutiveSummaryProps {
   data: VerdictData
@@ -48,6 +49,12 @@ function SectionCard({
 }
 
 export default function ExecutiveSummary({ data }: ExecutiveSummaryProps) {
+  const strengths = normalizeDisplayList(data.top_strengths)
+  const weaknesses = normalizeDisplayList(data.top_weaknesses)
+  const blocking = normalizeDisplayList(data.blocking_issues)
+  const fixes = normalizeDisplayList(data.recommended_fixes)
+  const roadmap = normalizeDisplayList(data.deployment_roadmap)
+
   return (
     <div className="space-y-6">
       {data.executive_summary && (
@@ -70,38 +77,38 @@ export default function ExecutiveSummary({ data }: ExecutiveSummaryProps) {
         <SectionCard
           icon={ThumbsUp}
           title="Top Strengths"
-          items={data.top_strengths ?? []}
+          items={strengths}
           color="#10B981"
           delay={0.1}
         />
         <SectionCard
           icon={ThumbsDown}
           title="Top Weaknesses"
-          items={data.top_weaknesses ?? []}
+          items={weaknesses}
           color="#F59E0B"
           delay={0.2}
         />
         <SectionCard
           icon={AlertOctagon}
           title="Blocking Issues"
-          items={data.blocking_issues ?? []}
+          items={blocking}
           color="#EF4444"
           delay={0.3}
         />
         <SectionCard
           icon={Wrench}
           title="Recommended Fixes"
-          items={data.recommended_fixes ?? []}
+          items={fixes}
           color="#A855F7"
           delay={0.4}
         />
       </div>
 
-      {(data.deployment_roadmap?.length ?? 0) > 0 && (
+      {roadmap.length > 0 && (
         <SectionCard
           icon={Map}
           title="Deployment Roadmap"
-          items={data.deployment_roadmap ?? []}
+          items={roadmap}
           color="#EC4899"
           delay={0.5}
         />

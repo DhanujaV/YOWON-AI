@@ -11,6 +11,7 @@ Uses PyGithub to pull:
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 import re
 from typing import Any
 
@@ -23,6 +24,7 @@ SOURCE_EXTENSIONS = {
 }
 DOC_EXTENSIONS = {".md", ".rst", ".txt", ".pdf", ".doc", ".docx"}
 PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".key"}
+DATA_EXTENSIONS = {".csv", ".tsv", ".jsonl", ".parquet", ".pkl", ".pickle", ".npy", ".npz", ".xlsx", ".xls", ".db", ".sqlite"}
 CONFIG_FILENAMES = {
     "package.json", "requirements.txt", "requirements-dev.txt", "pyproject.toml",
     "pom.xml", "build.gradle", "go.mod", "cargo.toml", "gemfile", "pipfile",
@@ -32,6 +34,33 @@ DEPLOYMENT_TERMS = (
     "dockerfile", "docker-compose.yml", "vercel.json", "netlify.toml", "render.yaml",
     "procfile", "kubernetes", "k8s", "helm", "terraform", ".github", "deploy",
 )
+IGNORE_DIRS = {
+    ".git", "node_modules", "venv", ".venv", "env", "dist", "build",
+    "__pycache__", ".pytest_cache", ".mypy_cache", ".next", ".nuxt",
+    "coverage", ".cache", "target", "out",
+}
+GENERATED_TERMS = (
+    "generated", "bundle.js", "bundle.css", ".min.js", ".min.css",
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock",
+)
+
+
+@dataclass(frozen=True)
+class RepositoryMetrics:
+    total_files: int = 0
+    code_files: int = 0
+    documentation_files: int = 0
+    presentation_files: int = 0
+    test_files: int = 0
+    configuration_files: int = 0
+    deployment_files: int = 0
+    data_files: int = 0
+    source_modules: int = 0
+    meaningful_files: int = 0
+    repository_completeness_score: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        return asdict(self)
 
 
 def _github_client() -> Github:
@@ -64,12 +93,21 @@ def _suffix(path: str) -> str:
     return "." + name.rsplit(".", 1)[-1]
 
 
-def _build_repository_statistics(file_paths: list[str]) -> dict[str, int]:
-    lower = [path.lower() for path in file_paths]
+def _is_ignored_path(path: str) -> bool:
+    p = path.replace("\\", "/").strip("/").lower()
+    parts = p.split("/")
+    if any(part in IGNORE_DIRS for part in parts):
+        return True
+    return any(term in p for term in GENERATED_TERMS)
+
+
+def _build_repository_statistics(file_paths: list[str]) -> RepositoryMetrics:
+    lower = [path.lower() for path in file_paths if path and not _is_ignored_path(path)]
     code = [p for p in lower if _suffix(p) in SOURCE_EXTENSIONS]
     docs = [p for p in lower if _suffix(p) in DOC_EXTENSIONS or "readme" in p or "/docs/" in p]
     presentations = [p for p in lower if _suffix(p) in PRESENTATION_EXTENSIONS]
     tests = [p for p in lower if any(term in p for term in ("test", "spec", "__tests__"))]
+    data = [p for p in lower if _suffix(p) in DATA_EXTENSIONS or "/data/" in p or p.startswith("data/")]
     configs = [
         p for p in lower
         if p.split("/")[-1] in CONFIG_FILENAMES
@@ -77,7 +115,7 @@ def _build_repository_statistics(file_paths: list[str]) -> dict[str, int]:
     ]
     deployments = [p for p in lower if any(term in p for term in DEPLOYMENT_TERMS)]
     source_modules = {p.split("/")[0] for p in code if "/" in p} | {p.rsplit(".", 1)[0] for p in code}
-    meaningful = set(code + docs + presentations + tests + configs + deployments)
+    meaningful = set(code + docs + presentations + tests + configs + deployments + data)
     completeness = min(
         100,
         min(35, len(code) * 7)
@@ -85,20 +123,22 @@ def _build_repository_statistics(file_paths: list[str]) -> dict[str, int]:
         + min(15, len(tests) * 8)
         + min(10, len(configs) * 4)
         + min(10, len(deployments) * 10)
+        + min(8, len(data) * 4)
         + min(15, len(source_modules) * 4),
     )
-    return {
-        "total_files": len(file_paths),
-        "code_files": len(code),
-        "documentation_files": len(docs),
-        "presentation_files": len(presentations),
-        "test_files": len(tests),
-        "configuration_files": len(configs),
-        "deployment_files": len(deployments),
-        "source_modules": len(source_modules),
-        "meaningful_files": len(meaningful),
-        "repository_completeness_score": completeness,
-    }
+    return RepositoryMetrics(
+        total_files=len(lower),
+        code_files=len(code),
+        documentation_files=len(docs),
+        presentation_files=len(presentations),
+        test_files=len(tests),
+        configuration_files=len(configs),
+        deployment_files=len(deployments),
+        data_files=len(data),
+        source_modules=len(source_modules),
+        meaningful_files=len(meaningful),
+        repository_completeness_score=completeness,
+    )
 
 
 def extract_github_data(github_url: str) -> dict[str, Any]:
@@ -151,13 +191,15 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
         while queue:
             item = queue.pop(0)
             depth = depth_map.get(item.path, 1)
+            if _is_ignored_path(item.path):
+                continue
             prefix = "  " * (depth - 1)
             icon = "📁" if item.type == "dir" else "📄"
             structure.append(f"{prefix}{icon} {item.path}")
             if item.type == "file":
                 file_paths.append(item.path)
 
-            if item.type == "dir" and depth < 2:
+            if item.type == "dir":
                 try:
                     children = repo.get_contents(item.path)
                     for child in children:
@@ -167,8 +209,8 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
                     pass
 
         result["folder_structure"] = structure[:200]  # Cap at 200 entries
-        result["repository_files"] = file_paths[:500]
-        result["repository_statistics"] = _build_repository_statistics(file_paths)
+        result["repository_files"] = file_paths[:1000]
+        result["repository_statistics"] = _build_repository_statistics(file_paths).as_dict()
     except GithubException:
         pass
 
@@ -194,6 +236,8 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
         queue = list(contents)
         while queue and len(py_files) < 5:
             item = queue.pop(0)
+            if _is_ignored_path(item.path):
+                continue
             if item.type == "file" and item.name.endswith(".py"):
                 py_files.append({
                     "path": item.path,

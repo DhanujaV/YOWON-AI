@@ -89,6 +89,9 @@ class ChiefVerdict(BaseModel):
     def coerce_fixes(cls, v):
         if not v:
             return []
+        if isinstance(v, str):
+            lines = [line.strip(" -\t") for line in v.splitlines() if line.strip(" -\t")]
+            return lines or [v]
         out: list[str] = []
         for item in v:
             if isinstance(item, str):

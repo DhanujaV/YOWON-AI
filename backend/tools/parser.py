@@ -87,6 +87,15 @@ def context_to_text(ctx: dict[str, Any]) -> str:
         parts.append(f"- Language: {gh.get('language')}")
         parts.append(f"- Stars: {gh.get('stars')} | Forks: {gh.get('forks')}")
         parts.append(f"- Topics: {', '.join(gh.get('topics', []))}")
+        stats = gh.get("repository_statistics") or {}
+        if stats:
+            parts.append(
+                "\n### Repository Metrics\n"
+                + "\n".join(
+                    f"- {key.replace('_', ' ').title()}: {value}"
+                    for key, value in stats.items()
+                )
+            )
         parts.append(f"\n### README (excerpt)\n{gh.get('readme', '')[:1500]}")
         deps = gh.get("dependencies", {})
         if deps:

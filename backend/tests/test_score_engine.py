@@ -110,8 +110,74 @@ def test_empty_repository_rejection_payload():
     assert result["overall_score"] == 0
     assert result["verdict"] == "REJECT"
     assert result["risk_level"] == "CRITICAL"
-    assert result["confidence"] < 20
+    assert result["confidence"] == 0
     assert result["blocking_issues"] == ["Repository contains no evaluable content."]
+
+
+def test_readme_only_repository_is_insufficient_content():
+    ctx = {
+        "description": "",
+        "github": {
+            "folder_structure": ["README.md"],
+            "repository_files": ["README.md"],
+            "repository_statistics": {
+                "total_files": 1,
+                "code_files": 0,
+                "documentation_files": 1,
+                "presentation_files": 0,
+                "test_files": 0,
+                "configuration_files": 0,
+                "deployment_files": 0,
+                "data_files": 0,
+                "source_modules": 0,
+                "meaningful_files": 1,
+                "repository_completeness_score": 8,
+            },
+            "dependencies": {},
+            "python_files": [],
+            "readme": "# Demo\nOnly a title.",
+        },
+        "security": {},
+        "pdf": {},
+        "ppt": {},
+    }
+    evidence = build_evidence_profile(ctx)
+    result = build_empty_repository_rejection(ctx, evidence)
+    assert evidence["empty_repository"] is True
+    assert result["status"] == "INSUFFICIENT_EVIDENCE"
+    assert result["overall_score"] == 0
+    assert result["confidence"] == 0
+
+
+def test_config_only_repository_is_insufficient_content():
+    ctx = {
+        "description": "",
+        "github": {
+            "folder_structure": ["package.json", ".gitignore"],
+            "repository_files": ["package.json", ".gitignore"],
+            "repository_statistics": {
+                "total_files": 2,
+                "code_files": 0,
+                "documentation_files": 0,
+                "presentation_files": 0,
+                "test_files": 0,
+                "configuration_files": 1,
+                "deployment_files": 0,
+                "data_files": 0,
+                "source_modules": 0,
+                "meaningful_files": 1,
+                "repository_completeness_score": 4,
+            },
+            "dependencies": {"package.json": "{}"},
+            "python_files": [],
+            "readme": "[No README found]",
+        },
+        "security": {},
+        "pdf": {},
+        "ppt": {},
+    }
+    evidence = build_evidence_profile(ctx)
+    assert evidence["empty_repository"] is True
 
 
 def test_empty_repository_caps_all_displayed_specialist_scores():
@@ -279,6 +345,47 @@ def test_confidence_tracks_evidence_completeness():
     empty_result = compute_overall(*reports(70), project_type="Hackathon Project", evidence=empty)
     tiny_result = compute_overall(*reports(70), project_type="Hackathon Project", evidence=tiny)
     full_result = compute_overall(*reports(100), project_type="Hackathon Project", evidence=FULL_EVIDENCE)
-    assert empty_result["confidence"] < 20
+    assert empty_result["confidence"] == 0
     assert 20 <= tiny_result["confidence"] <= 40
     assert full_result["confidence"] >= 90
+
+
+def test_positive_factors_generated_from_repository_evidence():
+    evidence = evidence_with(
+        checks={**FULL_CHECKS, "ml_evidence": True, "api_evidence": True},
+        repository_statistics={**FULL_EVIDENCE["repository_statistics"], "data_files": 1},
+    )
+    result = compute_overall(*reports(75), project_type="University Project", evidence=evidence)
+    assert "Documentation provided" in result["positive_factors"]
+    assert "Automated testing detected" in result["positive_factors"]
+    assert "Machine learning implementation" in result["positive_factors"]
+    assert "Backend architecture present" in result["positive_factors"]
+
+
+def test_university_ai_project_not_penalized_like_startup():
+    university_ai = evidence_with(
+        checks={
+            "market_evidence": False,
+            "business_model": False,
+            "competitive_analysis": False,
+            "adoption_evidence": False,
+            "deployment": False,
+            "ml_evidence": True,
+            "api_evidence": True,
+        },
+        repository_completeness_score=76,
+        repository_coverage=76,
+    )
+    result = compute_overall(*reports(82), project_type="University Project", evidence=university_ai)
+    assert result["overall_score"] >= 60
+    assert result["agent_scores"]["innovation"] >= 60
+    assert result["agent_scores"]["impact"] >= 55
+
+
+def test_presentation_floor_from_readme_and_docs():
+    with_readme_docs = evidence_with(
+        checks={"presentation_material": False, "documentation": True},
+        repository_statistics={**FULL_EVIDENCE["repository_statistics"], "documentation_files": 2, "presentation_files": 0},
+    )
+    result = compute_overall(*reports(20), project_type="University Project", evidence=with_readme_docs)
+    assert result["agent_scores"]["presentation"] >= 35
