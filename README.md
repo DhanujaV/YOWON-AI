@@ -8,19 +8,19 @@ Multi-agent evaluation system that assesses hackathon projects for production de
 
 ```
 React Frontend (Vite + Tailwind)
-        â”‚  SSE / REST
-        â–¼
+        |  SSE / REST
+        v
 FastAPI Backend
-        â”‚
-        â”œâ”€â”€ Coordinator (deterministic brief builder)
-        â”œâ”€â”€ 5 Parallel Specialist Agents (qwen2.5:3b)
-        â”‚     â”œâ”€â”€ Engineering (Technical)
-        â”‚     â”œâ”€â”€ Security
-        â”‚     â”œâ”€â”€ Presentation
-        â”‚     â”œâ”€â”€ Innovation
-        â”‚     â””â”€â”€ Risk
-        â”œâ”€â”€ Score Engine (deterministic weighted math)
-        â””â”€â”€ Chief Evaluator (qwen3:8b â€” synthesis + cross-exam)
+        |
+        +-- Coordinator (deterministic brief builder)
+        +-- 5 Parallel Specialist Agents (qwen2.5:3b)
+        |     +-- Engineering (Technical)
+        |     +-- Security
+        |     +-- Presentation
+        |     +-- Innovation
+        |     +-- Risk
+        +-- Score Engine (deterministic weighted math)
+        +-- Chief Evaluator (qwen3:8b - synthesis + cross-exam)
 ```
 
 ## Quick Start
@@ -81,12 +81,12 @@ Environment variables in `backend/.env`:
 
 ## Key Features
 
-- **Real-time SSE progress** â€” agent start/complete events, elapsed time, completion %
-- **Resilient pipeline** â€” agent failures don't crash evaluation; conservative fallbacks
-- **JSON repair** â€” handles malformed LLM output
-- **Deterministic scoring** â€” weighted math prevents hallucinated scores
-- **Premium UI** â€” agent network visualization, live timeline, verdict reveal
-- **PDF reports** â€” branded executive summary with deployment roadmap
+- **Real-time SSE progress** - agent start/complete events, elapsed time, completion %
+- **Resilient pipeline** - agent failures don't crash evaluation; conservative fallbacks
+- **JSON repair** - handles malformed LLM output
+- **Deterministic scoring** - weighted math prevents hallucinated scores
+- **Premium UI** - agent network visualization, live timeline, verdict reveal
+- **PDF reports** - branded executive summary with deployment roadmap
 
 ## Performance Targets
 

@@ -27,6 +27,9 @@ SOURCE_EXTENSIONS = {
 DOC_EXTENSIONS = {".md", ".rst", ".txt", ".pdf", ".doc", ".docx"}
 PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".key"}
 DATA_EXTENSIONS = {".csv", ".tsv", ".jsonl", ".parquet", ".pkl", ".pickle", ".npy", ".npz", ".xlsx", ".xls", ".db", ".sqlite"}
+MODEL_ARTIFACT_EXTENSIONS = {".h5", ".pt", ".pth", ".onnx", ".pkl", ".joblib"}
+DATASET_EXTENSIONS = {".csv", ".npy", ".parquet", ".json"}
+MAX_TOTAL_PENALTY = 45
 CONFIG_FILENAMES = {
     "package.json", "requirements.txt", "requirements-dev.txt", "pyproject.toml",
     "pom.xml", "build.gradle", "go.mod", "cargo.toml", "gemfile", "pipfile",
@@ -104,6 +107,21 @@ def _repository_file_list(ctx: dict[str, Any]) -> list[str]:
     ]
 
 
+def _artifact_profile(ctx: dict[str, Any]) -> dict[str, Any]:
+    files = _repository_file_list(ctx)
+    model_files = [path for path in files if _suffix(path) in MODEL_ARTIFACT_EXTENSIONS]
+    dataset_files = [
+        path for path in files
+        if _suffix(path) in DATASET_EXTENSIONS or "/data/" in path or path.startswith("data/")
+    ]
+    return {
+        "model_files": model_files[:10],
+        "dataset_files": dataset_files[:10],
+        "has_model_artifact": bool(model_files),
+        "has_dataset_artifact": bool(dataset_files),
+    }
+
+
 def _only_readme_or_config(ctx: dict[str, Any], stats: dict[str, int]) -> bool:
     files = _repository_file_list(ctx)
     if not files:
@@ -152,6 +170,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     dependency_text = " ".join(str(v) for v in (gh.get("dependencies") or {}).values()).lower()
     has_repo = bool(gh and not gh.get("error"))
     stats = _repository_statistics(ctx)
+    artifacts = _artifact_profile(ctx)
     has_report_document = bool((pdf_text and len(pdf_text) > 80) or (ppt_text and len(ppt_text) > 80))
     has_documents = bool(
         stats["documentation_files"] or stats["presentation_files"]
@@ -175,7 +194,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     )
     no_critical_security = not sec.get("secret_findings") and sec.get("risk_level", "LOW") != "CRITICAL"
     novelty = any(x in evidence_text for x in ("novel", "novelty", "differentiator", "unique", "original", "new approach"))
-    ml_evidence = any(x in (evidence_text + " " + dependency_text) for x in ML_TERMS)
+    ml_evidence = artifacts["has_model_artifact"] or any(x in (evidence_text + " " + dependency_text) for x in ML_TERMS)
     api_evidence = any(x in (evidence_text + " " + dependency_text) for x in API_TERMS)
     differentiation = any(x in evidence_text for x in ("competitor", "alternative", "different", "differentiation", "vs ", "compared with"))
     outcomes = any(x in evidence_text for x in IMPACT_TERMS)
@@ -199,7 +218,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "adoption_evidence": adoption or int(gh.get("stars") or 0) > 0 or int(gh.get("forks") or 0) > 0,
         "real_world_value": outcomes or any(x in evidence_text for x in ("problem", "workflow", "saves", "reduces", "improves")),
         "baseline_comparison": any(x in evidence_text for x in ("baseline", "benchmark", "compared with", "comparison")),
-        "experimental_evidence": any(x in evidence_text for x in ("experiment", "results", "accuracy", "precision", "recall", "f1", "dataset", "evaluation")),
+        "experimental_evidence": artifacts["has_dataset_artifact"] or any(x in evidence_text for x in ("experiment", "results", "accuracy", "precision", "recall", "f1", "dataset", "evaluation")),
         "reproducibility": any(x in evidence_text for x in ("reproduc", "seed", "methodology", "method", "notebook", "environment")),
         "citations": any(x in evidence_text for x in ("references", "citation", "doi", "arxiv", "et al.", "bibliography")),
         "market_evidence": any(x in evidence_text for x in BUSINESS_TERMS),
@@ -207,6 +226,8 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "competitive_analysis": any(x in evidence_text for x in ("competitor", "competitive", "alternative", "market map")),
         "contribution_readiness": any(x in evidence_text for x in ("contributing", "code of conduct", "issue template", "pull request", "license")),
         "ml_evidence": ml_evidence,
+        "model_artifact": artifacts["has_model_artifact"],
+        "dataset_artifact": artifacts["has_dataset_artifact"],
         "api_evidence": api_evidence,
     }
     evaluable_files = (
@@ -225,6 +246,8 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         + min(15, stats["configuration_files"] * 5)
         + min(15, stats["deployment_files"] * 10)
         + min(8, stats.get("data_files", 0) * 4)
+        + (8 if artifacts["has_model_artifact"] else 0)
+        + (6 if artifacts["has_dataset_artifact"] else 0)
     ))
     completeness_score = min(
         100,
@@ -237,11 +260,18 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         + (10 if checks["architecture"] else 0)
         + (5 if security_evidence else 0),
     )
+    if artifacts["has_model_artifact"]:
+        repository_coverage = min(100, repository_coverage + 8)
+        completeness_score = min(100, completeness_score + 8)
+    if artifacts["has_dataset_artifact"]:
+        repository_coverage = min(100, repository_coverage + 6)
+        completeness_score = min(100, completeness_score + 6)
     sources = parse_sources or {}
     json_validity = round(100 * sum(v == "llm" for v in sources.values()) / len(sources)) if sources else 100
     return {
         "checks": checks,
         "repository_statistics": {**stats, "repository_completeness_score": completeness_score},
+        "artifacts": artifacts,
         "has_repository": has_repo,
         "repository_has_content": repository_has_content,
         "empty_repository": empty_repository,
@@ -261,6 +291,7 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "data_availability": round(available / 5 * 100),
         "repository_coverage": repository_coverage,
         "repository_completeness_score": completeness_score,
+        "confidence_bonus": (8 if artifacts["has_model_artifact"] else 0) + (6 if artifacts["has_dataset_artifact"] else 0),
         "json_validity": json_validity,
         "evidence_quality": _score_band(round((completeness_score + repository_coverage + sum(bool(v) for v in checks.values()) / len(checks) * 100) / 3)),
     }
@@ -297,7 +328,8 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
         "evidence_quality": "Incomplete",
         "penalties": [{"factor": reason, "dimension": "overall", "points": 100}],
         "missing_evidence": [reason],
-        "positive_factors": [],
+        "positive_factors": ["Evidence profile generated"],
+        "confidence_sources": _confidence_sources(evidence),
         "blocking_issues": [reason],
         "top_strengths": [],
         "top_weaknesses": [reason],
@@ -319,10 +351,31 @@ def calibrate_agent_scores(
     scores = {key: _calibrate_curve(int(raw_scores.get(key, 0))) for key in DIMENSIONS}
     reasons: dict[str, list[str]] = {key: [] for key in DIMENSIONS}
     checks = evidence.get("checks", {})
+    total_penalty = 0
+    uncertainty_floor = {
+        "technical": 45,
+        "security": 45,
+        "scalability": 45,
+        "innovation": 50,
+        "presentation": 45,
+        "impact": 45,
+    }
 
     def deduct(dimension: str, points: int, reason: str) -> None:
-        scores[dimension] = max(0, scores[dimension] - points)
-        reasons[dimension].append(f"{reason} (-{points})")
+        nonlocal total_penalty
+        remaining = max(0, MAX_TOTAL_PENALTY - total_penalty)
+        applied = min(points, remaining)
+        if applied <= 0:
+            reasons[dimension].append(f"{reason} (penalty cap reached)")
+            return
+        total_penalty += applied
+        scores[dimension] = max(0, scores[dimension] - applied)
+        reasons[dimension].append(f"{reason} (-{applied})")
+
+    def uncertainty(dimension: str, reason: str, floor: int | None = None) -> None:
+        minimum = uncertainty_floor.get(dimension, 45) if floor is None else floor
+        scores[dimension] = max(scores[dimension], minimum)
+        reasons[dimension].append(reason)
 
     def cap(dimension: str, maximum: int, reason: str) -> None:
         if scores[dimension] > maximum:
@@ -337,40 +390,64 @@ def calibrate_agent_scores(
             reasons[dimension].append("Repository contains no evaluable content.")
         return scores, reasons
 
+    if checks.get("model_artifact"):
+        scores["technical"] = min(100, scores["technical"] + 8)
+        scores["innovation"] = max(scores["innovation"], 62)
+        reasons["technical"].append("Trained machine learning model artifact detected (+8)")
+    if checks.get("dataset_artifact"):
+        scores["technical"] = min(100, scores["technical"] + 4)
+        scores["impact"] = max(scores["impact"], 50)
+        reasons["technical"].append("Dataset artifacts strengthen technical evidence (+4)")
+
     if not checks.get("source_code"):
-        cap("technical", 20, "No source code evidence: technical score capped at 20")
-        cap("scalability", 20, "No source code evidence: scalability score capped at 20")
+        cap("technical", 35, "Unable to verify source implementation from repository evidence")
+        cap("scalability", 35, "Unable to verify scalability from repository evidence")
     if not checks.get("architecture") or not checks.get("multiple_components"):
         cap("technical", 80, "Technical score above 80 requires architecture evidence and multiple modules")
     if not checks.get("dependency_analysis") or not checks.get("security_practices"):
-        cap("security", 30, "No security evidence: security score capped at 30")
+        if project_type == "Corporate Project":
+            cap("security", 35, "Corporate security evidence missing: security score capped at 35")
+        else:
+            uncertainty("security", "Unable to determine security posture from repository evidence.")
     if not checks.get("no_critical_findings"):
         cap("security", 60, "Critical/high security findings prevent high security score")
     if not checks.get("presentation_material") and not checks.get("documentation"):
-        cap("presentation", 10, "No presentation or documentation evidence: presentation score capped at 10")
+        cap("presentation", 35, "Unable to determine presentation quality from repository evidence")
     if project_type != "University Project" and (
         not checks.get("innovation_evidence") or not checks.get("novelty_evidence") or not checks.get("differentiation_evidence")
     ):
-        cap("innovation", 30, "No novelty/differentiation evidence: innovation score capped at 30")
+        if project_type in ("Hackathon Project", "Startup Pitch", "Research Project"):
+            uncertainty("innovation", "Unable to determine innovation level from repository evidence.")
+        else:
+            cap("innovation", 45, "Innovation evidence unavailable: score capped at 45")
     if project_type not in ("University Project", "Research Project") and (
         not checks.get("impact_evidence") or not checks.get("adoption_evidence") or not checks.get("real_world_value")
     ):
-        cap("impact", 30, "No measurable impact/adoption/value evidence: impact score capped at 30")
+        if project_type == "Startup Pitch":
+            cap("impact", 45, "Startup impact evidence unavailable: score capped at 45")
+        else:
+            uncertainty("impact", "Unable to determine impact level from repository evidence.")
     if not evidence.get("repository_has_content"):
         cap("technical", 20, "No substantive repository evidence")
         cap("security", 30, "No substantive repository evidence")
         cap("scalability", 35, "No substantive repository evidence")
     if not checks.get("tests"):
-        cap("technical", 70, "No test evidence: technical score capped at 70")
-        deduct("technical", 8, "No test evidence")
+        if project_type == "Corporate Project":
+            cap("technical", 70, "No test evidence: technical score capped at 70")
+            deduct("technical", 8, "No test evidence")
+        else:
+            reasons["technical"].append("Testing evidence missing; confidence reduced rather than treated as failure")
     if not checks.get("security_practices"):
-        deduct("security", 12, "No security-practice evidence")
+        if project_type == "Corporate Project":
+            deduct("security", 12, "No security-practice evidence")
+        else:
+            reasons["security"].append("Security-practice evidence missing; confidence reduced")
     if not checks.get("documentation"):
-        deduct("presentation", 25, "No documentation or presentation evidence")
+        deduct("presentation", 12, "Documentation evidence missing")
     if not checks.get("innovation_evidence"):
-        deduct("innovation", 18, "No innovation evidence")
+        reasons["innovation"].append("Innovation evidence missing; confidence reduced")
     if evidence.get("data_availability", 0) < 40:
-        cap("impact", 40, "Insufficient evidence to substantiate impact")
+        cap("impact", 45, "Insufficient evidence to substantiate impact")
 
     if project_type == "Research Project":
         research_penalties = (
@@ -462,8 +539,12 @@ def compute_overall(
         {"factor": reason, "dimension": dimension}
         for dimension, items in calibration_reasons.items() for reason in items
     ]
+    material_penalties = [
+        item for item in penalties
+        if "(-" in item["factor"] or "capped" in item["factor"].lower() or "cap reached" in item["factor"].lower()
+    ]
     overall = weighted_score
-    if overall > 89 and (evidence.get("data_availability", 0) < 80 or penalties):
+    if overall > 89 and (evidence.get("data_availability", 0) < 80 or material_penalties):
         penalties.append({"factor": "Exceptional-score evidence gate", "dimension": "overall"})
         overall = 89
     if security.risk_level == "CRITICAL" or calibrated_scores["security"] < 20:
@@ -483,6 +564,9 @@ def compute_overall(
     elif evidence.get("tiny_incomplete_project") and overall > 50:
         penalties.append({"factor": "Tiny incomplete project maximum score cap", "dimension": "overall"})
         overall = 50
+    elif evidence.get("tiny_repository") and overall > 65 + evidence.get("confidence_bonus", 0):
+        penalties.append({"factor": "Tiny project evidence ceiling", "dimension": "overall"})
+        overall = min(overall, 65 + evidence.get("confidence_bonus", 0))
     elif evidence.get("small_academic_project") and overall > 70:
         penalties.append({"factor": "Small academic project maximum score cap", "dimension": "overall"})
         overall = 70
@@ -517,6 +601,7 @@ def compute_overall(
         "project_type": rubric["project_type"], "evaluation_standard": rubric["standard"],
         "scoring_weights": rubric["weights"], "score_band": label, "confidence": confidence,
         "confidence_explanation": _confidence_explanation(confidence, evidence),
+        "confidence_sources": _confidence_sources(evidence),
         "repository_statistics": evidence.get("repository_statistics", {}),
         "repository_completeness_score": evidence.get("repository_completeness_score", 0),
         "evidence_quality": evidence.get("evidence_quality", _score_band(evidence.get("repository_completeness_score", 0))),
@@ -531,24 +616,46 @@ def _positive_factors(evidence: dict[str, Any], score_strengths: list[str]) -> l
     checks = evidence.get("checks", {})
     stats = evidence.get("repository_statistics", {})
     factors: list[str] = []
+    if checks.get("source_code"):
+        factors.append("Source code detected")
     if stats.get("documentation_files", 0) > 0 or checks.get("documentation"):
-        factors.append("Documentation provided")
+        factors.append("Documentation present")
     if checks.get("tests"):
         factors.append("Automated testing detected")
     if checks.get("ml_evidence"):
         factors.append("Machine learning implementation")
+    if checks.get("model_artifact"):
+        factors.append("Trained machine learning model detected")
+    if checks.get("dataset_artifact") or stats.get("data_files", 0) > 0:
+        factors.append("Dataset artifacts detected")
     if checks.get("api_evidence"):
         factors.append("Backend architecture present")
     if checks.get("deployment"):
-        factors.append("Deployment readiness evidence")
+        factors.append("Deployment files present")
     if checks.get("architecture") or stats.get("source_modules", 0) >= 2:
-        factors.append("Good project organization")
-    if stats.get("data_files", 0) > 0:
-        factors.append("Dataset or structured data included")
+        factors.append("Modular architecture detected")
     factors.extend(score_strengths)
     if not factors and stats.get("meaningful_files", 0) > 0 and not evidence.get("empty_repository"):
         factors.append("Meaningful project content detected")
+    if not factors:
+        factors.append("Evidence profile generated")
     return list(dict.fromkeys(factors))[:8]
+
+
+def _confidence_sources(evidence: dict[str, Any]) -> list[str]:
+    checks = evidence.get("checks", {})
+    stats = evidence.get("repository_statistics", {})
+    sources = [
+        f"Repository completeness: {evidence.get('repository_completeness_score', 0)}/100",
+        "Documentation quality: present" if checks.get("documentation") or stats.get("documentation_files", 0) else "Documentation quality: limited",
+        f"Evidence coverage: {evidence.get('repository_coverage', 0)}/100",
+        f"Agent agreement: inferred from calibrated specialist scores",
+    ]
+    if checks.get("model_artifact"):
+        sources.append("Trained ML model artifact detected")
+    if checks.get("dataset_artifact"):
+        sources.append("Dataset artifact detected")
+    return sources
 
 
 def _confidence(agent_map: dict[str, int], evidence: dict[str, Any]) -> int:
@@ -559,6 +666,7 @@ def _confidence(agent_map: dict[str, int], evidence: dict[str, Any]) -> int:
         agreement * .15 + completeness * .25 + evidence.get("data_availability", 0) * .20
         + evidence.get("json_validity", 0) * .10 + evidence.get("repository_coverage", 0) * .15
         + evidence.get("repository_completeness_score", 0) * .15
+        + evidence.get("confidence_bonus", 0)
     )
     if evidence.get("empty_repository"):
         return 0
@@ -566,6 +674,8 @@ def _confidence(agent_map: dict[str, int], evidence: dict[str, Any]) -> int:
         return min(confidence, 40)
     if evidence.get("tiny_incomplete_project"):
         return min(confidence, 50)
+    if evidence.get("tiny_repository"):
+        return min(confidence, 40 + evidence.get("confidence_bonus", 0))
     if evidence.get("small_repository"):
         return min(confidence, 70)
     if evidence.get("repository_completeness_score", 0) >= 80 and evidence.get("data_availability", 0) >= 80:

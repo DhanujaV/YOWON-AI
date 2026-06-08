@@ -76,6 +76,7 @@ class ChiefVerdict(BaseModel):
     score_band: str = ""
     confidence: int = Field(ge=0, le=100, default=0)
     confidence_explanation: str = ""
+    confidence_sources: list[str] = Field(default_factory=list)
     repository_statistics: dict[str, int] = Field(default_factory=dict)
     repository_completeness_score: int = Field(ge=0, le=100, default=0)
     evidence_quality: str = ""
@@ -85,7 +86,7 @@ class ChiefVerdict(BaseModel):
     missing_evidence: list[str] = Field(default_factory=list)
     positive_factors: list[str] = Field(default_factory=list)
 
-    @field_validator("recommended_fixes", "roadmap", "deployment_roadmap", mode="before")
+    @field_validator("recommended_fixes", "roadmap", "deployment_roadmap", "confidence_sources", mode="before")
     @classmethod
     def coerce_fixes(cls, v):
         if not v:
@@ -105,6 +106,8 @@ class ChiefVerdict(BaseModel):
                     out.append(f"[P{priority or '?'}] {fix} (effort: {effort or 'TBD'})")
                 else:
                     out.append(str(fix))
+        if len(out) > 3 and all(len(item) == 1 for item in out):
+            return [line.strip(" -\t") for line in "".join(out).splitlines() if line.strip(" -\t")]
         return out
 
     @model_validator(mode="after")

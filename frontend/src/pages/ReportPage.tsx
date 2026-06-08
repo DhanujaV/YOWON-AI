@@ -128,7 +128,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
       .catch((err: unknown) => {
         const code = (err as { code?: string })?.code
         const message = err instanceof Error ? err.message : 'Failed to load report'
-        setLoadError(code === 'EVALUATION_INCOMPLETE' ? 'Evaluation still in progressâ€¦' : message)
+        setLoadError(code === 'EVALUATION_INCOMPLETE' ? 'Evaluation still in progress...' : message)
         setLoading(false)
       })
   }, [projectId, demo])
@@ -214,7 +214,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
           >
             <p className="text-amber-300 font-display font-semibold">Report Generation Failed</p>
             <p className="text-yowon-muted text-xs mt-1 font-mono">
-              {report.report_error || 'PDF export failed â€” scores and verdict below are still valid.'}
+              {report.report_error || 'PDF export failed. Scores and verdict below are still valid.'}
             </p>
           </motion.div>
         )}
@@ -392,7 +392,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                 <ul className="space-y-2">
                   {vd.contradictions.map((c, i) => (
                     <li key={i} className="text-sm text-yowon-muted flex gap-2">
-                      <span className="text-purple-400">âš¡</span> {c}
+                      <span className="text-purple-400">!</span> {c}
                     </li>
                   ))}
                 </ul>

@@ -179,7 +179,7 @@ def validate_chief_verdict(
     data["agent_scores"] = computed["agent_scores"]
     for key in (
         "project_type", "evaluation_standard", "scoring_weights", "score_band",
-        "confidence", "confidence_explanation", "repository_statistics",
+        "confidence", "confidence_explanation", "confidence_sources", "repository_statistics",
         "repository_completeness_score", "evidence_quality", "raw_weighted_score",
         "penalties", "calibration_adjustments", "missing_evidence", "positive_factors",
         "raw_agent_scores", "calibrated_agent_scores", "agent_calibration_reasons",
@@ -238,6 +238,7 @@ def _computed_to_chief(computed: dict[str, Any]) -> ChiefVerdict:
         score_band=computed.get("score_band", ""),
         confidence=computed.get("confidence", 0),
         confidence_explanation=computed.get("confidence_explanation", ""),
+        confidence_sources=computed.get("confidence_sources", []),
         repository_statistics=computed.get("repository_statistics", {}),
         repository_completeness_score=computed.get("repository_completeness_score", 0),
         evidence_quality=computed.get("evidence_quality", ""),

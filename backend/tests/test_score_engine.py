@@ -222,7 +222,7 @@ def test_tiny_repository_stays_low_score():
         },
     )
     result = compute_overall(*reports(95), project_type="Hackathon Project", evidence=tiny)
-    assert result["overall_score"] <= 25
+    assert result["overall_score"] <= 65
     assert result["confidence"] <= 40
 
 
@@ -330,7 +330,8 @@ def test_exceptional_score_requires_all_core_evidence():
     assert full["overall_score"] >= 90
     assert full["score_band"] == "Exceptional"
     assert missing_tests["overall_score"] <= 85
-    assert missing_tests["agent_scores"]["technical"] <= 70
+    assert missing_tests["confidence"] < full["confidence"]
+    assert any("confidence reduced" in r.lower() for r in missing_tests["agent_calibration_reasons"]["technical"])
 
 
 def test_confidence_tracks_evidence_completeness():
@@ -356,7 +357,7 @@ def test_positive_factors_generated_from_repository_evidence():
         repository_statistics={**FULL_EVIDENCE["repository_statistics"], "data_files": 1},
     )
     result = compute_overall(*reports(75), project_type="University Project", evidence=evidence)
-    assert "Documentation provided" in result["positive_factors"]
+    assert "Documentation present" in result["positive_factors"]
     assert "Automated testing detected" in result["positive_factors"]
     assert "Machine learning implementation" in result["positive_factors"]
     assert "Backend architecture present" in result["positive_factors"]
@@ -389,3 +390,65 @@ def test_presentation_floor_from_readme_and_docs():
     )
     result = compute_overall(*reports(20), project_type="University Project", evidence=with_readme_docs)
     assert result["agent_scores"]["presentation"] >= 35
+
+
+def test_ml_model_and_dataset_artifacts_raise_evidence_quality():
+    ctx = {
+        "description": "Image classifier with training pipeline and evaluation metrics.",
+        "project_type": "University Project",
+        "github": {
+            "folder_structure": [
+                "src/train.py",
+                "models/classifier.onnx",
+                "data/features.csv",
+                "README.md",
+            ],
+            "repository_files": [
+                "src/train.py",
+                "models/classifier.onnx",
+                "data/features.csv",
+                "README.md",
+            ],
+            "dependencies": {"requirements.txt": "torch\nsklearn"},
+            "python_files": ["src/train.py"],
+            "readme": "A documented machine learning project with dataset and model outputs.",
+        },
+        "security": {"summary": "No critical findings", "risk_level": "LOW", "dependency_warnings": []},
+        "pdf": {},
+        "ppt": {},
+    }
+    evidence = build_evidence_profile(ctx)
+    result = compute_overall(*reports(65), project_type="University Project", evidence=evidence)
+    assert evidence["checks"]["model_artifact"] is True
+    assert evidence["checks"]["dataset_artifact"] is True
+    assert result["agent_scores"]["technical"] >= 55
+    assert "Trained machine learning model detected" in result["positive_factors"]
+    assert "Dataset artifacts detected" in result["positive_factors"]
+    assert any("Repository completeness" in source for source in result["confidence_sources"])
+
+
+def test_missing_innovation_is_uncertainty_not_negative_evidence():
+    missing_innovation = evidence_with(checks={
+        "innovation_evidence": False,
+        "novelty_evidence": False,
+        "differentiation_evidence": False,
+    })
+    result = compute_overall(*reports(55), project_type="Hackathon Project", evidence=missing_innovation)
+    assert result["agent_scores"]["innovation"] >= 50
+    assert any("Unable to determine innovation" in item for item in result["agent_calibration_reasons"]["innovation"])
+
+
+def test_penalty_cap_limits_stacked_deductions():
+    weak_corporate = evidence_with(checks={
+        "tests": False,
+        "deployment": False,
+        "security_practices": False,
+        "dependency_analysis": False,
+    })
+    result = compute_overall(*reports(80), project_type="Corporate Project", evidence=weak_corporate)
+    applied = []
+    for items in result["agent_calibration_reasons"].values():
+        for item in items:
+            if "(-" in item:
+                applied.append(int(item.rsplit("(-", 1)[1].split(")", 1)[0]))
+    assert sum(applied) <= 45

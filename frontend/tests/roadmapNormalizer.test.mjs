@@ -63,6 +63,11 @@ if (enriched.verdict_data.deployment_roadmap.some(item => item.length === 1)) {
   throw new Error(`Parser produced character roadmap items: ${JSON.stringify(enriched.verdict_data.deployment_roadmap)}`)
 }
 
+const characterRoadmap = normalizeDisplayList(['P', 'h', 'a', 's', 'e', ' ', '1', '\n', '-', ' ', 'A', 'd', 'd', ' ', 't', 'e', 's', 't', 's'])
+if (characterRoadmap.some(item => item.length === 1)) {
+  throw new Error(`Character roadmap was not reassembled: ${JSON.stringify(characterRoadmap)}`)
+}
+
 for (const projectType of ['University Project', 'Startup Pitch', 'Research Project', 'Open Source Project']) {
   const report = enrichReport({
     project_id: projectType,

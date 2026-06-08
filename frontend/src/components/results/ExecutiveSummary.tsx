@@ -1,7 +1,7 @@
 import type { ElementType } from 'react'
 import { motion } from 'framer-motion'
 import {
-  FileText, ThumbsUp, ThumbsDown, AlertOctagon, Wrench, Map,
+  FileText, ThumbsUp, ThumbsDown, AlertOctagon, Wrench, Map, CheckCircle2,
 } from 'lucide-react'
 import type { VerdictData } from '../../types'
 import { normalizeDisplayList, phaseDeploymentRoadmap } from '../../utils/listNormalizer'
@@ -39,7 +39,7 @@ function SectionCard({
       <ul className="space-y-2">
         {items.map((item, i) => (
           <li key={i} className="flex gap-2 text-sm text-yowon-muted leading-relaxed">
-            <span className="text-yowon-accent mt-1.5 flex-shrink-0">â–¸</span>
+            <span className="text-yowon-accent mt-1.5 flex-shrink-0">-</span>
             <span>{item}</span>
           </li>
         ))}
@@ -76,7 +76,7 @@ function DeploymentRoadmap({
               <ul className="space-y-2">
                 {phase.items.map((item, i) => (
                   <li key={`${phase.title}-${i}`} className="flex gap-2 text-sm text-yowon-muted leading-relaxed">
-                    <span className="text-yowon-accent mt-1.5 flex-shrink-0">â€¢</span>
+                    <span className="text-yowon-accent mt-1.5 flex-shrink-0">-</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -94,6 +94,7 @@ export default function ExecutiveSummary({ data }: ExecutiveSummaryProps) {
   const weaknesses = normalizeDisplayList(data.top_weaknesses)
   const blocking = normalizeDisplayList(data.blocking_issues)
   const fixes = normalizeDisplayList(data.recommended_fixes)
+  const confidenceSources = normalizeDisplayList(data.confidence_sources)
   const roadmap = data.roadmap ?? data.deployment_roadmap
 
   return (
@@ -142,6 +143,13 @@ export default function ExecutiveSummary({ data }: ExecutiveSummaryProps) {
           items={fixes}
           color="#A855F7"
           delay={0.4}
+        />
+        <SectionCard
+          icon={CheckCircle2}
+          title="Confidence Sources"
+          items={confidenceSources}
+          color="#14B8A6"
+          delay={0.45}
         />
       </div>
 

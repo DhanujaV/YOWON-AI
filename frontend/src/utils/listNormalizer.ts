@@ -1,9 +1,15 @@
 export function normalizeDisplayList(items: string[] | string | undefined): string[] {
   if (!items) return []
-  if (Array.isArray(items)) return items.map(String).filter(Boolean)
+  if (Array.isArray(items)) {
+    const normalizedItems = items.map(String).map(item => item.trim()).filter(Boolean)
+    if (normalizedItems.length > 3 && normalizedItems.every(item => item.length === 1)) {
+      return normalizeDisplayList(normalizedItems.join(''))
+    }
+    return normalizedItems
+  }
   return String(items)
-    .split(/\r?\n/)
-    .map(line => line.trim().replace(/^[-*]\s*/, ''))
+    .split(/\r?\n|(?=Phase\s+\d+)/i)
+    .map(line => line.trim().replace(/^[-*•]\s*/, ''))
     .filter(Boolean)
 }
 

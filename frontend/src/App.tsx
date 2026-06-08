@@ -7,6 +7,8 @@ const SubmitPage = lazy(() => import('./pages/SubmitPage'))
 const EvaluatePage = lazy(() => import('./pages/EvaluatePage'))
 const ReportPage = lazy(() => import('./pages/ReportPage'))
 const DemoPage = lazy(() => import('./pages/DemoPage'))
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
+const JuryDashboardPage = lazy(() => import('./pages/JuryDashboardPage'))
 
 function PageLoader() {
   return (
@@ -33,7 +35,7 @@ function NotFoundPage() {
         404
       </h1>
       <p className="text-yowon-muted max-w-sm">This page doesn't exist in the YOWON AI network.</p>
-      <a href="/" className="yowon-btn-primary">â† Back to Command Center</a>
+      <a href="/" className="yowon-btn-primary">Back to Command Center</a>
     </div>
   )
 }
@@ -51,6 +53,8 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/submit" element={<SubmitPage />} />
         <Route path="/demo" element={<DemoPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/jury" element={<JuryDashboardPage />} />
         <Route
           path="/evaluate/:projectId"
           element={

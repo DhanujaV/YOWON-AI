@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Github, Link, BarChart3, Zap, AlertCircle, FileStack, Sparkles,
-  CheckCircle2,
+  CheckCircle2, ClipboardCheck,
 } from 'lucide-react'
 import AppShell from '../components/layout/AppShell'
 import FileDropZone from '../components/upload/FileDropZone'
@@ -16,9 +16,10 @@ const PROJECT_TYPES: ProjectType[] = [
 ]
 
 const STEPS = [
-  { id: 1, label: 'Details', icon: BarChart3 },
-  { id: 2, label: 'Code & Links', icon: Github },
-  { id: 3, label: 'Documents', icon: FileStack },
+  { id: 1, label: 'Project Information', icon: BarChart3 },
+  { id: 2, label: 'Upload Assets', icon: FileStack },
+  { id: 3, label: 'Evaluation Type', icon: Github },
+  { id: 4, label: 'Review & Submit', icon: ClipboardCheck },
 ]
 
 export default function SubmitPage() {
@@ -36,7 +37,11 @@ export default function SubmitPage() {
   const [pptFile, setPptFile] = useState<File | null>(null)
 
   const activeStep =
-    pdfFile || pptFile ? 3 : githubUrl || demoUrl ? 2 : name.trim() || description.trim() ? 1 : 1
+    loading ? 4 :
+      projectType && (githubUrl || demoUrl || pdfFile || pptFile || description.trim()) && name.trim() ? 4 :
+        projectType && name.trim() ? 3 :
+          githubUrl || demoUrl || pdfFile || pptFile ? 2 :
+            1
 
   const validate = (): string | null => {
     if (!name.trim()) return 'Project name is required'
@@ -104,7 +109,7 @@ export default function SubmitPage() {
             <span className="gradient-text">Submit Your Project</span>
           </h1>
           <p className="text-yowon-muted max-w-md mx-auto">
-            Tell us about your build. The AI jury needs at least one source â€” repo, description, or docs.
+            Tell us about your build. The AI jury needs at least one source: repo, description, or docs.
           </p>
         </motion.div>
 
@@ -174,7 +179,7 @@ export default function SubmitPage() {
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. MediAssist â€” AI-Powered Triage App"
+                placeholder="e.g. MediAssist - AI-Powered Triage App"
                 className="yowon-input"
                 required
               />
@@ -336,7 +341,7 @@ export default function SubmitPage() {
           </motion.button>
 
           <p className="text-center text-xs text-yowon-muted/80 font-mono">
-            Encrypted upload Â· Parallel agent analysis Â· Verdict in minutes
+            Encrypted upload - Parallel agent analysis - Verdict in minutes
           </p>
         </form>
       </main>

@@ -108,17 +108,17 @@ export default function EvaluatePage() {
           </h1>
           {status === 'done' && reportStatus === 'failed' && (
             <p className="text-amber-400/90 text-sm mt-2 max-w-lg mx-auto">
-              Verdict ready â€” PDF report generation failed. View results below.
+              Verdict ready. PDF report generation failed. View results below.
             </p>
           )}
           {status === 'done' && reportStatus === 'ready' && (
-            <p className="text-emerald-400/80 text-sm mt-2">Redirecting to intelligence reportâ€¦</p>
+            <p className="text-emerald-400/80 text-sm mt-2">Redirecting to intelligence report...</p>
           )}
 
           {projectName && (
             <p className="text-yowon-muted">
               Evaluating <span className="text-violet-300 font-medium">{projectName}</span>
-              {projectType && <span className="text-pink-300 font-mono text-xs"> Â· {projectType}</span>}
+              {projectType && <span className="text-pink-300 font-mono text-xs"> - {projectType}</span>}
             </p>
           )}
 
@@ -198,7 +198,7 @@ export default function EvaluatePage() {
               Report Generation Failed
             </p>
             <p className="text-yowon-muted text-xs mb-4 font-mono">
-              {reportError || 'PDF could not be built â€” JSON verdict is still available.'}
+              {reportError || 'PDF could not be built. JSON verdict is still available.'}
             </p>
             <button
               onClick={() => navigate(`/report/${projectId}`)}
@@ -225,7 +225,7 @@ export default function EvaluatePage() {
         )}
 
         <p className="text-center text-xs text-yowon-muted mt-8 font-mono">
-          Target: &lt;60s evaluation Â· Real-time SSE progress Â· No simulated updates
+          Target: &lt;60s evaluation - Real-time SSE progress - No simulated updates
         </p>
       </main>
     </AppShell>

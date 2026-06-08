@@ -80,6 +80,7 @@ export interface VerdictData {
   score_band?: string
   confidence?: number
   confidence_explanation?: string
+  confidence_sources?: string[]
   repository_statistics?: Record<string, number>
   repository_completeness_score?: number
   evidence_quality?: string

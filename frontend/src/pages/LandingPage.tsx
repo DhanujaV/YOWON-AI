@@ -59,7 +59,7 @@ export default function LandingPage() {
         >
           <Radio size={14} className="text-emerald-400 animate-pulse" />
           <span className="text-xs font-mono text-yowon-muted tracking-widest uppercase">
-            Multi-Agent AI Â· Deployment Intelligence
+            Multi-Agent AI - Deployment Intelligence
           </span>
         </motion.div>
 
@@ -80,7 +80,7 @@ export default function LandingPage() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.25 }}
             >
-              Know if you&apos;re ready to deploy â€” before production does.
+              Know if you&apos;re ready to deploy before production does.
             </motion.p>
 
             <motion.p
@@ -90,7 +90,7 @@ export default function LandingPage() {
               transition={{ delay: 0.35 }}
             >
               Upload code, docs, and decks. Our AI jury runs in parallel across engineering,
-              security, innovation, and risk â€” then delivers one clear deployment verdict.
+              security, innovation, and risk, then delivers one clear deployment verdict.
             </motion.p>
 
             <motion.div
@@ -107,6 +107,10 @@ export default function LandingPage() {
               <Link to="/demo" className="yowon-btn-ghost">
                 <Play size={16} className="text-amber-400" />
                 View Demo
+              </Link>
+              <Link to="/jury" className="yowon-btn-ghost">
+                <Shield size={16} className="text-cyan-300" />
+                AI Jury
               </Link>
             </motion.div>
 
@@ -206,10 +210,13 @@ export default function LandingPage() {
             Ready for <span className="gradient-text">Deployment Intelligence</span>?
           </h2>
           <p className="text-yowon-muted mb-6 max-w-md mx-auto">
-            Get a board-ready verdict in minutes â€” not weeks of manual review cycles.
+            Get a board-ready verdict in minutes, not weeks of manual review cycles.
           </p>
           <Link to="/submit" className="yowon-btn-primary inline-flex items-center gap-2">
             Launch Evaluation <ArrowRight size={16} />
+          </Link>
+          <Link to="/leaderboard" className="yowon-btn-ghost inline-flex items-center gap-2 ml-3 mt-3 sm:mt-0">
+            View Rankings
           </Link>
         </motion.div>
       </section>
