@@ -82,6 +82,30 @@ def _doc_digest(ctx: dict[str, Any]) -> str:
     return "\n\n".join(parts) if parts else "[No presentation materials]"
 
 
+def _code_intelligence_digest(ctx: dict[str, Any]) -> str:
+    code = ctx.get("code_reader") or {}
+    arch = ctx.get("architecture") or {}
+    evidence = ctx.get("technical_evidence") or {}
+    detection = ctx.get("project_type_detection") or {}
+    if not any((code, arch, evidence, detection)):
+        return "[No code intelligence summary]"
+    lines = [
+        "Code Reader Summary:",
+        code.get("summary", ""),
+        "Detected Technologies: " + ", ".join(evidence.get("detected_technologies", []) or code.get("frameworks", []) or []),
+        "Detected Algorithms: " + ", ".join(evidence.get("detected_algorithms", []) or code.get("algorithms", []) or []),
+        "Architecture: " + arch.get("summary", ""),
+        "Evidence Found: " + ", ".join(evidence.get("evidence_found", [])),
+        "Evidence Missing: " + ", ".join(evidence.get("evidence_missing", [])),
+    ]
+    if detection:
+        lines.append(
+            f"Project Type Detector: {detection.get('project_type')} "
+            f"(confidence={detection.get('confidence')}) - {detection.get('justification', '')}"
+        )
+    return "\n".join(line for line in lines if line.strip())
+
+
 def slice_context_for_agent(ctx: dict[str, Any], agent: str) -> str:
     brief_parts: list[str] = [
         f"Project: {ctx.get('project_name', 'Unknown')}",
@@ -90,8 +114,10 @@ def slice_context_for_agent(ctx: dict[str, Any], agent: str) -> str:
 
     if agent == "technical":
         brief_parts.append(_gh_excerpt(ctx, readme_limit=1000))
+        brief_parts.append(_code_intelligence_digest(ctx))
     elif agent == "security":
         brief_parts.append(_security_digest(ctx))
+        brief_parts.append(_code_intelligence_digest(ctx))
         gh = ctx.get("github") or {}
         deps = gh.get("dependencies") or {}
         if deps:
@@ -103,6 +129,7 @@ def slice_context_for_agent(ctx: dict[str, Any], agent: str) -> str:
         brief_parts.append(_doc_digest(ctx))
     elif agent == "innovation":
         brief_parts.append((ctx.get("description") or "")[:400])
+        brief_parts.append(_code_intelligence_digest(ctx))
         gh = ctx.get("github") or {}
         if gh and not gh.get("error"):
             topics = ", ".join(gh.get("topics", [])[:8])
@@ -112,9 +139,11 @@ def slice_context_for_agent(ctx: dict[str, Any], agent: str) -> str:
         brief_parts.append((ctx.get("description") or "")[:350])
         brief_parts.append(_security_digest(ctx)[:500])
         brief_parts.append(_gh_excerpt(ctx, readme_limit=500))
+        brief_parts.append(_code_intelligence_digest(ctx))
     else:
         brief_parts.append(_gh_excerpt(ctx, readme_limit=600))
         brief_parts.append(_doc_digest(ctx))
+        brief_parts.append(_code_intelligence_digest(ctx))
 
     text = "\n\n".join(brief_parts)
     return truncate_text(text, MAX_AGENT_DIGEST_CHARS, label=f"digest:{agent}")

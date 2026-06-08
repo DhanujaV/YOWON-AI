@@ -11,8 +11,8 @@ import { uploadProject, triggerEvaluation } from '../api/api'
 import type { ProjectType } from '../types'
 
 const PROJECT_TYPES: ProjectType[] = [
-  'University Project', 'Hackathon Project', 'Startup Pitch',
-  'Research Project', 'Corporate Project', 'Open Source Project',
+  'University Project', 'Hackathon Project', 'Startup Pitch', 'Startup Product',
+  'Research Project', 'Corporate Project', 'Enterprise System', 'Open Source Project',
 ]
 
 const STEPS = [

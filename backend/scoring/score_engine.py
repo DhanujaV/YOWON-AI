@@ -171,6 +171,14 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     has_repo = bool(gh and not gh.get("error"))
     stats = _repository_statistics(ctx)
     artifacts = _artifact_profile(ctx)
+    code = ctx.get("code_reader") or {}
+    architecture = ctx.get("architecture") or {}
+    technical_evidence = ctx.get("technical_evidence") or {}
+    code_signals = code.get("signals") or {}
+    architecture_layers = architecture.get("layers") or {}
+    evidence_found = set(technical_evidence.get("evidence_found") or [])
+    detected_technologies = technical_evidence.get("detected_technologies") or code.get("frameworks") or []
+    detected_algorithms = technical_evidence.get("detected_algorithms") or code.get("algorithms") or []
     has_report_document = bool((pdf_text and len(pdf_text) > 80) or (ppt_text and len(ppt_text) > 80))
     has_documents = bool(
         stats["documentation_files"] or stats["presentation_files"]
@@ -185,8 +193,8 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     source_code_exists = stats["code_files"] > 0 or bool(gh.get("python_files"))
     architecture_evidence = source_code_exists and (
         stats["source_modules"] >= 2 or any(term in evidence_text for term in ARCHITECTURE_TERMS)
-    )
-    multiple_components = stats["source_modules"] >= 2 or stats["code_files"] >= 3
+    ) or bool(architecture_layers.get("backend") or architecture_layers.get("frontend") or architecture_layers.get("api_layer"))
+    multiple_components = stats["source_modules"] >= 2 or stats["code_files"] >= 3 or sum(bool(v) for v in architecture_layers.values()) >= 2
     security_evidence = bool(sec) and (
         bool(sec.get("bandit_issues") is not None)
         or bool(sec.get("dependency_warnings") is not None)
@@ -194,8 +202,8 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
     )
     no_critical_security = not sec.get("secret_findings") and sec.get("risk_level", "LOW") != "CRITICAL"
     novelty = any(x in evidence_text for x in ("novel", "novelty", "differentiator", "unique", "original", "new approach"))
-    ml_evidence = artifacts["has_model_artifact"] or any(x in (evidence_text + " " + dependency_text) for x in ML_TERMS)
-    api_evidence = any(x in (evidence_text + " " + dependency_text) for x in API_TERMS)
+    ml_evidence = bool(code_signals.get("ml_model")) or artifacts["has_model_artifact"] or any(x in (evidence_text + " " + dependency_text) for x in ML_TERMS)
+    api_evidence = bool(code_signals.get("rest_api") or architecture_layers.get("api_layer")) or any(x in (evidence_text + " " + dependency_text) for x in API_TERMS)
     differentiation = any(x in evidence_text for x in ("competitor", "alternative", "different", "differentiation", "vs ", "compared with"))
     outcomes = any(x in evidence_text for x in IMPACT_TERMS)
     adoption = any(x in evidence_text for x in ("users", "customers", "stars", "downloads", "pilot", "adoption", "traction"))
@@ -206,19 +214,19 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "multiple_components": multiple_components,
         "documentation": bool(len(readme) > 120 or len(pdf_text) > 120 or len(ppt_text) > 120),
         "presentation_material": bool(ctx.get("ppt") or stats["presentation_files"] or len(readme) > 500 or len(pdf_text) > 500),
-        "tests": stats["test_files"] > 0 or any(x in structure for x in ("test", "spec", "__tests__")),
-        "deployment": stats["deployment_files"] > 0 or any(x in structure for x in DEPLOYMENT_NAMES),
+        "tests": bool(code_signals.get("testing")) or stats["test_files"] > 0 or any(x in structure for x in ("test", "spec", "__tests__")),
+        "deployment": bool(code_signals.get("deployment_pattern") or architecture_layers.get("deployment_layer")) or stats["deployment_files"] > 0 or any(x in structure for x in DEPLOYMENT_NAMES),
         "dependency_analysis": security_evidence and (stats["configuration_files"] > 0 or bool(gh.get("dependencies"))),
-        "security_practices": security_evidence and any(x in evidence_text for x in SECURITY_TERMS),
+        "security_practices": bool(code_signals.get("security_implementation") or code_signals.get("authentication")) or (security_evidence and any(x in evidence_text for x in SECURITY_TERMS)),
         "no_critical_findings": no_critical_security,
-        "innovation_evidence": novelty or differentiation or ml_evidence or bool(gh.get("topics")),
-        "novelty_evidence": novelty or ml_evidence,
-        "differentiation_evidence": differentiation or ml_evidence,
+        "innovation_evidence": bool(detected_algorithms or code_signals.get("custom_algorithm")) or novelty or differentiation or ml_evidence or bool(gh.get("topics")),
+        "novelty_evidence": bool(detected_algorithms or code_signals.get("custom_algorithm")) or novelty or ml_evidence,
+        "differentiation_evidence": bool(detected_algorithms or code_signals.get("custom_algorithm")) or differentiation or ml_evidence,
         "impact_evidence": outcomes,
         "adoption_evidence": adoption or int(gh.get("stars") or 0) > 0 or int(gh.get("forks") or 0) > 0,
         "real_world_value": outcomes or any(x in evidence_text for x in ("problem", "workflow", "saves", "reduces", "improves")),
         "baseline_comparison": any(x in evidence_text for x in ("baseline", "benchmark", "compared with", "comparison")),
-        "experimental_evidence": artifacts["has_dataset_artifact"] or any(x in evidence_text for x in ("experiment", "results", "accuracy", "precision", "recall", "f1", "dataset", "evaluation")),
+        "experimental_evidence": bool(ml_evidence and (detected_algorithms or artifacts["has_dataset_artifact"])) or artifacts["has_dataset_artifact"] or any(x in evidence_text for x in ("experiment", "results", "accuracy", "precision", "recall", "f1", "dataset", "evaluation")),
         "reproducibility": any(x in evidence_text for x in ("reproduc", "seed", "methodology", "method", "notebook", "environment")),
         "citations": any(x in evidence_text for x in ("references", "citation", "doi", "arxiv", "et al.", "bibliography")),
         "market_evidence": any(x in evidence_text for x in BUSINESS_TERMS),
@@ -229,6 +237,9 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "model_artifact": artifacts["has_model_artifact"],
         "dataset_artifact": artifacts["has_dataset_artifact"],
         "api_evidence": api_evidence,
+        "database_evidence": bool(code_signals.get("database") or architecture_layers.get("database") or "Database" in evidence_found),
+        "authentication_evidence": bool(code_signals.get("authentication") or architecture_layers.get("authentication") or "Authentication" in evidence_found),
+        "custom_algorithm": bool(code_signals.get("custom_algorithm") or "Custom algorithm" in evidence_found),
     }
     evaluable_files = (
         stats["meaningful_files"]
@@ -294,6 +305,13 @@ def build_evidence_profile(ctx: dict[str, Any], parse_sources: dict[str, str] | 
         "confidence_bonus": (8 if artifacts["has_model_artifact"] else 0) + (6 if artifacts["has_dataset_artifact"] else 0),
         "json_validity": json_validity,
         "evidence_quality": _score_band(round((completeness_score + repository_coverage + sum(bool(v) for v in checks.values()) / len(checks) * 100) / 3)),
+        "code_reader": code,
+        "architecture": architecture,
+        "technical_evidence": technical_evidence,
+        "detected_technologies": detected_technologies,
+        "detected_algorithms": detected_algorithms,
+        "community_impact_score": _community_impact_score(gh),
+        "project_type_detection": ctx.get("project_type_detection", {}),
     }
 
 
@@ -329,6 +347,14 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
         "penalties": [{"factor": reason, "dimension": "overall", "points": 100}],
         "missing_evidence": _missing_evidence_items(evidence),
         "positive_factors": ["Evidence profile generated"],
+        "detected_technologies": evidence.get("detected_technologies", []),
+        "detected_algorithms": evidence.get("detected_algorithms", []),
+        "architecture_summary": (evidence.get("architecture") or {}).get("summary", ""),
+        "evidence_found": (evidence.get("technical_evidence") or {}).get("evidence_found", []),
+        "evidence_missing": (evidence.get("technical_evidence") or {}).get("evidence_missing", []),
+        "community_impact_score": evidence.get("community_impact_score", 0),
+        "project_type_justification": (evidence.get("project_type_detection") or {}).get("justification", ""),
+        "calibration_explanation": "Evaluation stopped because no meaningful project files were detected.",
         "confidence_sources": _confidence_sources(evidence),
         "blocking_issues": [reason],
         "top_strengths": [],
@@ -398,6 +424,19 @@ def calibrate_agent_scores(
         scores["technical"] = min(100, scores["technical"] + 4)
         scores["impact"] = max(scores["impact"], 50)
         reasons["technical"].append("Dataset artifacts strengthen technical evidence (+4)")
+    if checks.get("api_evidence"):
+        scores["technical"] = min(100, scores["technical"] + 4)
+        scores["scalability"] = min(100, scores["scalability"] + 3)
+        reasons["technical"].append("REST/API implementation detected (+4)")
+    if checks.get("database_evidence"):
+        scores["technical"] = min(100, scores["technical"] + 3)
+        reasons["technical"].append("Database integration detected (+3)")
+    if checks.get("authentication_evidence"):
+        scores["security"] = min(100, scores["security"] + 4)
+        reasons["security"].append("Authentication implementation detected (+4)")
+    if checks.get("custom_algorithm"):
+        scores["innovation"] = min(100, scores["innovation"] + 6)
+        reasons["innovation"].append("Custom algorithmic implementation detected (+6)")
 
     if not checks.get("source_code"):
         cap("technical", 35, "Unable to verify source implementation from repository evidence")
@@ -579,6 +618,10 @@ def compute_overall(
     if evidence.get("empty_repository"):
         overall = 0
         penalties.append({"factor": "Repository contains no evaluable content.", "dimension": "overall"})
+    community_bonus = min(15, int(evidence.get("community_impact_score", 0) * 0.15))
+    if community_bonus and overall > 0:
+        overall = min(100, overall + community_bonus)
+        penalties.append({"factor": f"Community impact signal (+{community_bonus})", "dimension": "overall"})
 
     overall = round(max(0, overall))
     label = _score_band(overall)
@@ -605,6 +648,14 @@ def compute_overall(
         "repository_statistics": evidence.get("repository_statistics", {}),
         "repository_completeness_score": evidence.get("repository_completeness_score", 0),
         "evidence_quality": evidence.get("evidence_quality", _score_band(evidence.get("repository_completeness_score", 0))),
+        "detected_technologies": evidence.get("detected_technologies", []),
+        "detected_algorithms": evidence.get("detected_algorithms", []),
+        "architecture_summary": (evidence.get("architecture") or {}).get("summary", ""),
+        "evidence_found": (evidence.get("technical_evidence") or {}).get("evidence_found", []),
+        "evidence_missing": (evidence.get("technical_evidence") or {}).get("evidence_missing", []),
+        "community_impact_score": evidence.get("community_impact_score", 0),
+        "project_type_justification": (evidence.get("project_type_detection") or {}).get("justification", ""),
+        "calibration_explanation": _calibration_explanation(evidence, penalties),
         "calibration_adjustments": penalties,
         "penalties": penalties, "missing_evidence": missing, "positive_factors": positive_factors,
         "blocking_issues": security.critical_findings[:3] if security.risk_level in ("HIGH", "CRITICAL") else [],
@@ -615,6 +666,7 @@ def compute_overall(
 def _positive_factors(evidence: dict[str, Any], score_strengths: list[str]) -> list[str]:
     checks = evidence.get("checks", {})
     stats = evidence.get("repository_statistics", {})
+    tech_evidence = evidence.get("technical_evidence") or {}
     factors: list[str] = []
     if checks.get("source_code"):
         factors.append("Source code detected")
@@ -634,12 +686,49 @@ def _positive_factors(evidence: dict[str, Any], score_strengths: list[str]) -> l
         factors.append("Deployment files present")
     if checks.get("architecture") or stats.get("source_modules", 0) >= 2:
         factors.append("Modular architecture detected")
+    for item in tech_evidence.get("evidence_found", []):
+        factors.append(f"{item} detected")
+    if evidence.get("detected_technologies"):
+        factors.append("Detected technologies: " + ", ".join(evidence["detected_technologies"][:4]))
+    if evidence.get("detected_algorithms"):
+        factors.append("Detected algorithms: " + ", ".join(evidence["detected_algorithms"][:4]))
+    if evidence.get("community_impact_score", 0) > 0:
+        factors.append(f"Community impact signal: {evidence['community_impact_score']}/100")
     factors.extend(score_strengths)
     if not factors and stats.get("meaningful_files", 0) > 0 and not evidence.get("empty_repository"):
         factors.append("Meaningful project content detected")
     if not factors:
         factors.append("Evidence profile generated")
     return list(dict.fromkeys(factors))[:8]
+
+
+def _community_impact_score(gh: dict[str, Any]) -> int:
+    stars = int(gh.get("stars") or 0)
+    forks = int(gh.get("forks") or 0)
+    contributors = int(gh.get("contributors") or 0)
+    releases = int(gh.get("releases") or 0)
+    score = (
+        min(35, stars // 5)
+        + min(25, forks // 2)
+        + min(25, contributors * 3)
+        + min(15, releases * 3)
+    )
+    return max(0, min(100, score))
+
+
+def _calibration_explanation(evidence: dict[str, Any], penalties: list[dict[str, Any]]) -> str:
+    found = (evidence.get("technical_evidence") or {}).get("evidence_found", [])
+    missing = (evidence.get("technical_evidence") or {}).get("evidence_missing", [])
+    parts = []
+    if found:
+        parts.append("Implementation evidence increased confidence: " + ", ".join(found[:6]) + ".")
+    if missing:
+        parts.append("Missing evidence primarily reduces confidence unless required by project type: " + ", ".join(missing[:6]) + ".")
+    if evidence.get("community_impact_score", 0):
+        parts.append(f"Community impact contributed a bounded signal ({evidence['community_impact_score']}/100, capped at 15% of final score).")
+    if penalties:
+        parts.append(f"{len(penalties)} calibration adjustment(s) were applied.")
+    return " ".join(parts) or "Scores calibrated from specialist outputs and available project evidence."
 
 
 def _missing_evidence_items(

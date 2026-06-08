@@ -6,9 +6,13 @@ from typing import Any
 
 DEFAULT_PROJECT_TYPE = "Hackathon Project"
 PROJECT_TYPES = (
-    "University Project", "Hackathon Project", "Startup Pitch",
-    "Research Project", "Corporate Project", "Open Source Project",
+    "University Project", "Hackathon Project", "Startup Pitch", "Startup Product",
+    "Research Project", "Corporate Project", "Enterprise System", "Open Source Project",
 )
+PROJECT_TYPE_ALIASES = {
+    "Startup Product": "Startup Pitch",
+    "Enterprise System": "Corporate Project",
+}
 
 RUBRICS: dict[str, dict[str, Any]] = {
     "University Project": {
@@ -60,7 +64,8 @@ RUBRICS: dict[str, dict[str, Any]] = {
 
 
 def normalize_project_type(project_type: str | None) -> str:
-    return project_type if project_type in RUBRICS else DEFAULT_PROJECT_TYPE
+    normalized = PROJECT_TYPE_ALIASES.get(str(project_type or "").strip(), project_type)
+    return normalized if normalized in RUBRICS else DEFAULT_PROJECT_TYPE
 
 
 def get_rubric(project_type: str | None) -> dict[str, Any]:

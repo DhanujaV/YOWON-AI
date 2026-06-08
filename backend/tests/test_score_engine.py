@@ -399,6 +399,41 @@ def test_missing_evidence_generated_separately_from_penalties():
     assert result["missing_evidence"] != result["penalties"]
 
 
+def test_code_evidence_improves_small_technical_project_explanation():
+    evidence = evidence_with(
+        checks={
+            **FULL_CHECKS,
+            "tests": False,
+            "deployment": False,
+            "api_evidence": True,
+            "database_evidence": True,
+            "authentication_evidence": True,
+            "custom_algorithm": True,
+        },
+        repository_statistics={
+            **FULL_EVIDENCE["repository_statistics"],
+            "total_files": 6,
+            "code_files": 3,
+            "test_files": 0,
+            "deployment_files": 0,
+            "meaningful_files": 5,
+        },
+        tiny_repository=True,
+        technical_evidence={
+            "evidence_found": ["REST API", "Database", "Authentication", "Custom algorithm"],
+            "evidence_missing": ["Testing", "Docker/deployment"],
+        },
+        detected_technologies=["FastAPI", "SQLAlchemy"],
+        detected_algorithms=["Random Forest"],
+        community_impact_score=20,
+    )
+    result = compute_overall(*reports(70), project_type="Hackathon Project", evidence=evidence)
+    assert "REST API detected" in result["positive_factors"]
+    assert "FastAPI" in result["detected_technologies"]
+    assert "Random Forest" in result["detected_algorithms"]
+    assert "Implementation evidence increased confidence" in result["calibration_explanation"]
+
+
 def test_university_ai_project_not_penalized_like_startup():
     university_ai = evidence_with(
         checks={

@@ -406,6 +406,9 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               <h2 className="font-display font-bold text-xl mb-4">Evaluation Context</h2>
               <p className="text-sm text-yowon-muted mb-2"><span className="text-yowon-text">Project Type:</span> {vd?.project_type ?? report.project_type}</p>
               <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Evaluation Standard:</span> {vd?.evaluation_standard}</p>
+              {vd?.project_type_justification && (
+                <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Project Type Justification:</span> {vd.project_type_justification}</p>
+              )}
               <div className="grid sm:grid-cols-3 gap-3 mb-4">
                 <div className="border border-white/5 rounded-lg p-3">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-yowon-muted">Score Band</p>
@@ -423,12 +426,51 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               {vd?.confidence_explanation && (
                 <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Confidence:</span> {vd.confidence_explanation}</p>
               )}
+              {vd?.calibration_explanation && (
+                <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Calibration:</span> {vd.calibration_explanation}</p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {Object.entries(vd?.scoring_weights ?? {}).map(([name, weight]) => (
                   <span key={name} className="glass-pill px-3 py-1 text-xs font-mono text-cyan-300">
                     {name.replace('_', ' ')} {Math.round(weight * 100)}%
                   </span>
                 ))}
+              </div>
+            </div>
+
+            <div className="glass-card">
+              <h2 className="font-display font-bold text-xl mb-4">Code Intelligence</h2>
+              {vd?.architecture_summary && (
+                <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Architecture:</span> {vd.architecture_summary}</p>
+              )}
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <h3 className="text-cyan-300 mb-2">Detected Technologies</h3>
+                  {(vd?.detected_technologies?.length ? vd.detected_technologies : ['None explicitly detected']).map(x => (
+                    <p key={x} className="text-yowon-muted mb-1">{x}</p>
+                  ))}
+                </div>
+                <div>
+                  <h3 className="text-emerald-300 mb-2">Detected Algorithms</h3>
+                  {(vd?.detected_algorithms?.length ? vd.detected_algorithms : ['None explicitly detected']).map(x => (
+                    <p key={x} className="text-yowon-muted mb-1">{x}</p>
+                  ))}
+                </div>
+                <div>
+                  <h3 className="text-emerald-300 mb-2">Evidence Found</h3>
+                  {(vd?.evidence_found?.length ? vd.evidence_found : ['No implementation evidence found']).map(x => (
+                    <p key={x} className="text-yowon-muted mb-1">+ {x}</p>
+                  ))}
+                </div>
+                <div>
+                  <h3 className="text-red-300 mb-2">Evidence Missing</h3>
+                  {(vd?.evidence_missing?.length ? vd.evidence_missing : ['No missing implementation evidence recorded']).map(x => (
+                    <p key={x} className="text-yowon-muted mb-1">{x}</p>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 glass-pill inline-flex px-3 py-1 text-xs font-mono text-cyan-300">
+                Community Impact Score: {vd?.community_impact_score ?? 0}/100
               </div>
             </div>
 

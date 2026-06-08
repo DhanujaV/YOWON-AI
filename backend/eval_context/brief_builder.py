@@ -65,6 +65,9 @@ def build_brief(ctx: dict[str, Any]) -> EvaluationBrief:
         available.append("project description")
 
     evidence_summary: list[str] = []
+    code = ctx.get("code_reader") or {}
+    tech_evidence = ctx.get("technical_evidence") or {}
+    architecture = ctx.get("architecture") or {}
     if metrics:
         if metrics.get("documentation_files", 0) > 0:
             evidence_summary.append("documentation present")
@@ -76,6 +79,14 @@ def build_brief(ctx: dict[str, Any]) -> EvaluationBrief:
             evidence_summary.append("data files present")
         if metrics.get("source_modules", 0) >= 2:
             evidence_summary.append("modular source structure")
+    if code.get("frameworks"):
+        evidence_summary.append("frameworks detected: " + ", ".join(code["frameworks"][:4]))
+    if code.get("algorithms"):
+        evidence_summary.append("algorithms detected: " + ", ".join(code["algorithms"][:4]))
+    if tech_evidence.get("evidence_found"):
+        evidence_summary.append("implementation evidence: " + ", ".join(tech_evidence["evidence_found"][:6]))
+    if architecture.get("summary"):
+        evidence_summary.append(architecture["summary"])
 
     sec = ctx.get("security") or {}
     risk = sec.get("risk_level", "UNKNOWN")

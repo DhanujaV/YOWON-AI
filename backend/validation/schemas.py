@@ -123,6 +123,15 @@ class ChiefVerdict(BaseModel):
     calibration_adjustments: list[dict] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
     positive_factors: list[str] = Field(default_factory=list)
+    detected_technologies: list[str] = Field(default_factory=list)
+    detected_algorithms: list[str] = Field(default_factory=list)
+    architecture_summary: str = ""
+    evidence_found: list[str] = Field(default_factory=list)
+    evidence_missing: list[str] = Field(default_factory=list)
+    confidence_explanation: str = ""
+    calibration_explanation: str = ""
+    project_type_justification: str = ""
+    community_impact_score: int = Field(ge=0, le=100, default=0)
 
     @field_validator("recommended_fixes", "roadmap", "deployment_roadmap", "confidence_sources", mode="before")
     @classmethod

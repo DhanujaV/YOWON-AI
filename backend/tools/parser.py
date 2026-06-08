@@ -13,6 +13,12 @@ from tools.github_tool import extract_github_data
 from tools.pdf_tool import extract_pdf_data
 from tools.ppt_tool import extract_ppt_data
 from tools.security_tool import run_security_analysis
+from analysis.code_intelligence import (
+    detect_project_type,
+    extract_technical_evidence,
+    read_codebase,
+    summarize_architecture,
+)
 
 logger = get_logger(__name__)
 
@@ -38,6 +44,10 @@ def build_project_context(
         "pdf": {},
         "ppt": {},
         "security": {},
+        "code_reader": {},
+        "architecture": {},
+        "project_type_detection": {},
+        "technical_evidence": {},
     }
 
     if github_url:
@@ -67,6 +77,23 @@ def build_project_context(
         t0 = time.perf_counter()
         ctx["security"] = run_security_analysis(python_files, dep_files)
         logger.info("Security scan duration=%.2fs", time.perf_counter() - t0)
+
+    if ctx.get("github") and not ctx["github"].get("error"):
+        t0 = time.perf_counter()
+        ctx["code_reader"] = read_codebase(ctx)
+        ctx["architecture"] = summarize_architecture(ctx, ctx["code_reader"])
+        ctx["project_type_detection"] = detect_project_type(ctx, ctx["code_reader"], ctx["architecture"])
+        ctx["technical_evidence"] = extract_technical_evidence(ctx, ctx["code_reader"], ctx["architecture"])
+        ctx["submitted_project_type"] = project_type
+        detection = ctx["project_type_detection"]
+        if detection.get("confidence", 0) >= 0.75:
+            ctx["project_type"] = detection["project_type"]
+        logger.info(
+            "Code intelligence duration=%.2fs detected_type=%s confidence=%s",
+            time.perf_counter() - t0,
+            detection.get("project_type"),
+            detection.get("confidence"),
+        )
 
     return ctx
 
@@ -106,6 +133,33 @@ def context_to_text(ctx: dict[str, Any]) -> str:
         structure = gh.get("folder_structure", [])
         if structure:
             parts.append("\n### Folder Structure\n" + "\n".join(structure[:30]))
+
+    code = ctx.get("code_reader") or {}
+    if code:
+        parts.append("\n## Code Reader Summary")
+        parts.append(code.get("summary", ""))
+        if code.get("frameworks"):
+            parts.append("Frameworks: " + ", ".join(code["frameworks"]))
+        if code.get("algorithms"):
+            parts.append("Algorithms: " + ", ".join(code["algorithms"]))
+
+    arch = ctx.get("architecture") or {}
+    if arch:
+        parts.append("\n## Architecture Summary")
+        parts.append(arch.get("summary", ""))
+
+    evidence = ctx.get("technical_evidence") or {}
+    if evidence:
+        parts.append("\n## Implementation Evidence")
+        parts.append("Evidence Found: " + ", ".join(evidence.get("evidence_found", [])))
+        parts.append("Evidence Missing: " + ", ".join(evidence.get("evidence_missing", [])))
+
+    detection = ctx.get("project_type_detection") or {}
+    if detection:
+        parts.append(
+            f"\n## Project Type Detection\nDetected: {detection.get('project_type')} "
+            f"(confidence {detection.get('confidence')})\n{detection.get('justification', '')}"
+        )
 
     pdf = ctx.get("pdf", {})
     if pdf and not pdf.get("error"):

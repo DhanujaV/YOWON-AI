@@ -164,6 +164,14 @@ export function enrichReport(raw: ReportData): ReportData {
     penalties: parsed?.penalties ?? [],
     missing_evidence: missingEvidence,
     positive_factors: positiveFactors,
+    detected_technologies: normalizeDisplayList(parsed?.detected_technologies),
+    detected_algorithms: normalizeDisplayList(parsed?.detected_algorithms),
+    architecture_summary: parsed?.architecture_summary,
+    evidence_found: normalizeDisplayList(parsed?.evidence_found),
+    evidence_missing: normalizeDisplayList(parsed?.evidence_missing),
+    calibration_explanation: parsed?.calibration_explanation,
+    project_type_justification: parsed?.project_type_justification,
+    community_impact_score: parsed?.community_impact_score ?? 0,
   }
 
   return { ...raw, verdict_data }

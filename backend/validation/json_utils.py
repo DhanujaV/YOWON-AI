@@ -183,6 +183,9 @@ def validate_chief_verdict(
         "repository_completeness_score", "evidence_quality", "raw_weighted_score",
         "penalties", "calibration_adjustments", "missing_evidence", "positive_factors",
         "raw_agent_scores", "calibrated_agent_scores", "agent_calibration_reasons",
+        "detected_technologies", "detected_algorithms", "architecture_summary",
+        "evidence_found", "evidence_missing", "calibration_explanation",
+        "project_type_justification", "community_impact_score",
     ):
         data[key] = computed.get(key)
     if computed.get("contradictions"):
@@ -247,4 +250,12 @@ def _computed_to_chief(computed: dict[str, Any]) -> ChiefVerdict:
         calibration_adjustments=computed.get("calibration_adjustments", computed.get("penalties", [])),
         missing_evidence=computed.get("missing_evidence", []),
         positive_factors=computed.get("positive_factors", []),
+        detected_technologies=computed.get("detected_technologies", []),
+        detected_algorithms=computed.get("detected_algorithms", []),
+        architecture_summary=computed.get("architecture_summary", ""),
+        evidence_found=computed.get("evidence_found", []),
+        evidence_missing=computed.get("evidence_missing", []),
+        calibration_explanation=computed.get("calibration_explanation", ""),
+        project_type_justification=computed.get("project_type_justification", ""),
+        community_impact_score=computed.get("community_impact_score", 0),
     )

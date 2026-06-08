@@ -171,6 +171,7 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
         "repository_statistics": {},
         "dependencies": {},
         "python_files": [],
+        "source_files": [],
     }
 
     # ── README ──────────────────────────────────────────────────────────────
@@ -232,24 +233,42 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
     # ── Python source files (up to 5 files for static analysis) ──────────────
     try:
         py_files: list[dict] = []
+        source_files: list[dict] = []
         contents = repo.get_contents("")
         queue = list(contents)
-        while queue and len(py_files) < 5:
+        while queue and len(source_files) < 20:
             item = queue.pop(0)
             if _is_ignored_path(item.path):
                 continue
-            if item.type == "file" and item.name.endswith(".py"):
-                py_files.append({
+            if item.type == "file" and _suffix(item.path) in SOURCE_EXTENSIONS:
+                sample = {
                     "path": item.path,
                     "content": _safe_decode(item),
-                })
+                }
+                source_files.append(sample)
+                if item.name.endswith(".py") and len(py_files) < 8:
+                    py_files.append(sample)
             elif item.type == "dir":
                 try:
                     queue.extend(repo.get_contents(item.path))
                 except GithubException:
                     pass
         result["python_files"] = py_files
+        result["source_files"] = source_files
     except GithubException:
         pass
+
+    try:
+        result["contributors"] = repo.get_contributors().totalCount
+    except Exception:
+        result["contributors"] = 0
+    try:
+        result["releases"] = repo.get_releases().totalCount
+    except Exception:
+        result["releases"] = 0
+    try:
+        result["open_issues"] = repo.open_issues_count
+    except Exception:
+        result["open_issues"] = 0
 
     return result

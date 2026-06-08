@@ -31,6 +31,14 @@ class ChiefVerdictModel(BaseModel):
     roadmap: list[str] = Field(default_factory=list)
     deployment_roadmap: list[str] = Field(default_factory=list)
     agent_scores: AgentScoresModel
+    detected_technologies: list[str] = Field(default_factory=list)
+    detected_algorithms: list[str] = Field(default_factory=list)
+    architecture_summary: str = ""
+    evidence_found: list[str] = Field(default_factory=list)
+    evidence_missing: list[str] = Field(default_factory=list)
+    calibration_explanation: str = ""
+    project_type_justification: str = ""
+    community_impact_score: int = 0
 
 
 AGENT_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -175,6 +183,14 @@ def merge_chief_verdict(parsed: dict[str, Any], computed: dict[str, Any]) -> dic
         "recommended_fixes": _normalize_string_list(parsed.get("recommended_fixes")),
         "roadmap": _normalize_string_list(parsed.get("roadmap") or parsed.get("deployment_roadmap")),
         "deployment_roadmap": _normalize_string_list(parsed.get("deployment_roadmap") or parsed.get("roadmap")),
+        "detected_technologies": _normalize_string_list(computed.get("detected_technologies") or parsed.get("detected_technologies")),
+        "detected_algorithms": _normalize_string_list(computed.get("detected_algorithms") or parsed.get("detected_algorithms")),
+        "architecture_summary": computed.get("architecture_summary") or parsed.get("architecture_summary", ""),
+        "evidence_found": _normalize_string_list(computed.get("evidence_found") or parsed.get("evidence_found")),
+        "evidence_missing": _normalize_string_list(computed.get("evidence_missing") or parsed.get("evidence_missing")),
+        "calibration_explanation": computed.get("calibration_explanation") or parsed.get("calibration_explanation", ""),
+        "project_type_justification": computed.get("project_type_justification") or parsed.get("project_type_justification", ""),
+        "community_impact_score": computed.get("community_impact_score", parsed.get("community_impact_score", 0)),
     }
 
     if not merged["recommended_fixes"]:
