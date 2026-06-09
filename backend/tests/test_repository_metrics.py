@@ -1,6 +1,7 @@
 """Repository metrics classification and ignore rules."""
 
 from tools.github_tool import _build_repository_statistics
+from tools.github_tool import _importance_score
 
 
 def test_repository_metrics_small_repo_counts_meaningful_files():
@@ -68,3 +69,9 @@ def test_repository_metrics_large_repo_ignores_generated_artifacts():
     assert metrics["deployment_files"] == 1
     assert metrics["data_files"] == 1
     assert metrics["repository_completeness_score"] >= 90
+
+
+def test_repository_sampling_prioritizes_implementation_paths():
+    assert _importance_score("backend/api/routes.py") > _importance_score("docs/overview.md")
+    assert _importance_score("main.py") > _importance_score("scripts/helper.py")
+    assert _importance_score("frontend/src/App.tsx") > _importance_score("assets/generated.bundle.js")

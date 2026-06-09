@@ -67,3 +67,52 @@ def test_project_type_detector_recognizes_research_signal():
     detected = detect_project_type(ctx, code, arch)
     assert detected["project_type"] == "Research Project"
     assert detected["confidence"] >= 0.5
+
+
+def test_code_reader_extracts_advanced_architecture_evidence():
+    ctx = {
+        "description": "Agentic RAG API with background jobs.",
+        "github": {
+            "readme": "Open source RAG service with ChromaDB, Celery and OpenAI integrations.",
+            "topics": ["rag", "agents"],
+            "repository_files": [
+                "backend/api/routes.py",
+                "backend/agents/planner.py",
+                "backend/workers/queue.py",
+                ".github/workflows/ci.yml",
+            ],
+            "source_files": [
+                {
+                    "path": "backend/api/routes.py",
+                    "content": """
+from fastapi import APIRouter
+import openai
+import chromadb
+
+router = APIRouter()
+client = chromadb.Client()
+
+@router.post("/query")
+def query(payload):
+    return openai.chat.completions.create(messages=[])
+""",
+                },
+                {"path": "backend/workers/queue.py", "content": "from celery import Celery\nqueue = Celery('jobs')"},
+                {"path": "backend/agents/planner.py", "content": "class PlannerAgent:\n    def rank_tools(self): return []"},
+            ],
+            "top_code_snippets": [{"path": "backend/api/routes.py", "snippet": "@router.post('/query')"}],
+            "repository_statistics": {"meaningful_files": 6, "code_files": 3, "documentation_files": 1},
+        },
+    }
+    code = read_codebase(ctx)
+    arch = summarize_architecture(ctx, code)
+    evidence = extract_technical_evidence(ctx, code, arch)
+
+    assert code["signals"]["rest_api"] is True
+    assert code["signals"]["integrations"] is True
+    assert code["signals"]["queue"] is True
+    assert code["signals"]["vector_database"] is True
+    assert arch["layers"]["agent_systems"] is True
+    assert "REST API" in evidence["evidence_found"]
+    assert "Vector database" in evidence["evidence_found"]
+    assert evidence["rest_apis_found"]
