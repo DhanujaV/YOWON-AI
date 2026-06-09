@@ -297,6 +297,8 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
   const confidence = vd?.confidence ?? 0
   const riskLevel = vd?.risk_level ?? 'MEDIUM'
   const ranking = vd?.ranking
+  const selectedProjectType = vd?.submitted_project_type ?? report.project_type ?? vd?.project_type
+  const detectedConfidence = Math.round((vd?.detected_project_confidence ?? 0) * 100)
   const heatmapCategories = radarData.map(d => ({ label: d.subject, score: d.score }))
   const barData = radarData.map(d => ({ name: d.subject, score: d.score }))
   const pdfId = demo ? null : projectId
@@ -418,7 +420,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                 </div>
                 <p className="text-4xl font-display font-bold text-yowon-text">{rankText(ranking?.category_rank)}</p>
                 <p className="text-sm text-yowon-muted mt-3">
-                  Among {report.project_type ?? vd?.project_type ?? 'This Category'} Projects
+                  Among {vd?.project_type ?? report.project_type ?? 'This Category'} Projects
                 </p>
                 <p className="text-xs text-yowon-muted/80 mt-1 font-mono">
                   Compared Against: {ranking?.category_projects_compared ?? 0}
@@ -434,7 +436,14 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
 
             <div className="glass-card">
               <h2 className="font-display font-bold text-xl mb-4">Evaluation Context</h2>
-              <p className="text-sm text-yowon-muted mb-2"><span className="text-yowon-text">Project Type:</span> {vd?.project_type ?? report.project_type}</p>
+              <p className="text-sm text-yowon-muted mb-2"><span className="text-yowon-text">Selected Project Type:</span> {selectedProjectType}</p>
+              {vd?.detected_project_type && (
+                <p className="text-sm text-yowon-muted mb-2">
+                  <span className="text-yowon-text">AI Detected Type:</span> {vd.detected_project_type}
+                  {detectedConfidence ? ` (${detectedConfidence}% confidence)` : ''}
+                </p>
+              )}
+              <p className="text-sm text-yowon-muted mb-2"><span className="text-yowon-text">Scoring Rubric Used:</span> {vd?.project_type ?? report.project_type}</p>
               <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Evaluation Standard:</span> {vd?.evaluation_standard}</p>
               {vd?.project_type_justification && (
                 <p className="text-sm text-yowon-muted mb-4"><span className="text-yowon-text">Project Type Justification:</span> {vd.project_type_justification}</p>

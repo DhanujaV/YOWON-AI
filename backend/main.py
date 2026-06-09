@@ -65,6 +65,7 @@ from security import (
 
 setup_logging(LOG_LEVEL)
 logger = logging.getLogger(__name__)
+UPLOAD_PROJECT_TYPES = (*PROJECT_TYPES, "Auto Detect")
 
 app = FastAPI(
     title="YOWON AI API",
@@ -157,8 +158,8 @@ async def upload_project(
     safe_name = sanitize_project_name(name)
     safe_github_url = validate_github_url(github_url)
 
-    if project_type not in PROJECT_TYPES:
-        raise HTTPException(status_code=422, detail=f"Invalid project_type. Choose one of: {', '.join(PROJECT_TYPES)}")
+    if project_type not in UPLOAD_PROJECT_TYPES:
+        raise HTTPException(status_code=422, detail=f"Invalid project_type. Choose one of: {', '.join(UPLOAD_PROJECT_TYPES)}")
 
     try:
         if pdf_file and pdf_file.filename:
@@ -177,7 +178,7 @@ async def upload_project(
     project = Project(
         id=project_id,
         name=safe_name,
-        project_type=normalize_project_type(project_type),
+        project_type="Auto Detect" if project_type == "Auto Detect" else normalize_project_type(project_type),
         description="",
         github_url=safe_github_url,
         demo_video_url=None,

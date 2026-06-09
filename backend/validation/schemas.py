@@ -109,6 +109,9 @@ class ChiefVerdict(BaseModel):
     calibrated_agent_scores: AgentScores
     agent_calibration_reasons: dict[str, list[str]] = Field(default_factory=dict)
     project_type: str = "Hackathon Project"
+    submitted_project_type: str = ""
+    detected_project_type: str = ""
+    detected_project_confidence: float = 0
     evaluation_standard: str = ""
     scoring_weights: dict[str, float] = Field(default_factory=dict)
     score_band: str = ""

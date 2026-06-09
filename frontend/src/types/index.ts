@@ -5,7 +5,7 @@ export type AgentStatus = 'waiting' | 'running' | 'completed' | 'failed'
 export type ProjectStatus = 'pending' | 'running' | 'done' | 'failed'
 
 export type ReportStatus = 'pending' | 'ready' | 'failed' | 'skipped' | 'unknown'
-export type ProjectType = 'University Project' | 'Hackathon Project' | 'Startup Pitch' | 'Startup Product' | 'Research Project' | 'Corporate Project' | 'Enterprise System' | 'Open Source Project'
+export type ProjectType = 'Auto Detect' | 'University Project' | 'Hackathon Project' | 'Startup Pitch' | 'Startup Product' | 'Research Project' | 'Corporate Project' | 'Enterprise System' | 'Open Source Project'
 
 
 
@@ -84,6 +84,9 @@ export interface VerdictData {
 
   contradictions?: string[]
   project_type?: ProjectType | string
+  submitted_project_type?: ProjectType | string
+  detected_project_type?: ProjectType | string
+  detected_project_confidence?: number
   evaluation_standard?: string
   scoring_weights?: Record<string, number>
   score_band?: string

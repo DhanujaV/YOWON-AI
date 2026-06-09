@@ -40,6 +40,9 @@ def build_project_context(
     ctx: dict[str, Any] = {
         "project_name": project_name,
         "project_type": project_type,
+        "submitted_project_type": project_type,
+        "detected_project_type": "",
+        "detected_project_confidence": 0,
         "description": description,
         "github": {},
         "pdf": {},
@@ -88,9 +91,10 @@ def build_project_context(
                 ctx["security"] = security_future.result()
                 logger.info("Security scan duration=%.2fs", time.perf_counter() - t0)
 
-        ctx["submitted_project_type"] = project_type
         detection = ctx["project_type_detection"]
-        if detection.get("confidence", 0) >= 0.75:
+        ctx["detected_project_type"] = detection.get("project_type", "")
+        ctx["detected_project_confidence"] = detection.get("confidence", 0)
+        if project_type == "Auto Detect" and detection.get("project_type"):
             ctx["project_type"] = detection["project_type"]
         logger.info(
             "Project type detected=%s confidence=%s submitted=%s effective=%s",
