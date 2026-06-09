@@ -43,6 +43,15 @@ export interface AgentScores {
 
 }
 
+export interface RankingData {
+  global_percentile?: number | null
+  global_rank?: string
+  category_percentile?: number | null
+  category_rank?: string
+  projects_compared?: number
+  category_projects_compared?: number
+}
+
 
 
 export interface VerdictData {
@@ -95,6 +104,7 @@ export interface VerdictData {
   calibration_explanation?: string
   project_type_justification?: string
   community_impact_score?: number
+  ranking?: RankingData
 
 }
 

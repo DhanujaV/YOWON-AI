@@ -25,7 +25,7 @@ import { getDemoReport } from '../utils/demoData'
 import {
   getRadarData, computeConsensus, scoreColor,
 } from '../utils/reportParser'
-import type { Evaluation, ReportData } from '../types'
+import type { Evaluation, RankingData, ReportData } from '../types'
 
 const AGENT_META: Record<string, { icon: ElementType; label: string; color: string }> = {
   engineering: { icon: Cpu, label: 'Engineering', color: '#00E5FF' },
@@ -44,8 +44,12 @@ const AGENT_META: Record<string, { icon: ElementType; label: string; color: stri
   cross_exam: { icon: Activity, label: 'Cross Exam', color: '#7C3AED' },
 }
 
-function percentile(score: number) {
-  return Math.max(1, Math.min(99, Math.round(score * 0.82 + 9)))
+function hasRankingValue(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function rankText(rank?: string) {
+  return rank && rank !== 'Insufficient Data' ? rank : 'Insufficient Data'
 }
 
 function ProjectDNA({ data }: { data: { subject: string; score: number }[] }) {
@@ -81,10 +85,12 @@ function ProjectDNA({ data }: { data: { subject: string; score: number }[] }) {
   )
 }
 
-function BenchmarkComparison({ score, consensus }: { score: number; consensus: number }) {
+function BenchmarkComparison({ score, consensus, ranking }: { score: number; consensus: number; ranking?: RankingData }) {
+  const globalPercentile = hasRankingValue(ranking?.global_percentile) ? ranking?.global_percentile ?? 0 : null
+  const categoryPercentile = hasRankingValue(ranking?.category_percentile) ? ranking?.category_percentile ?? 0 : null
   const rows = [
-    { label: 'Portfolio Median', value: 54 },
-    { label: 'Accepted Projects', value: 78 },
+    { label: 'Global Percentile', value: globalPercentile },
+    { label: 'Category Percentile', value: categoryPercentile },
     { label: 'This Project', value: score },
     { label: 'Agent Consensus', value: consensus },
   ]
@@ -99,14 +105,22 @@ function BenchmarkComparison({ score, consensus }: { score: number; consensus: n
           <div key={row.label}>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-yowon-muted">{row.label}</span>
-              <span className="font-mono text-yowon-text">{Math.round(row.value)}/100</span>
+              <span className="font-mono text-yowon-text">
+                {row.value === null ? 'Insufficient Data' : `${Math.round(row.value)}/100`}
+              </span>
             </div>
             <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-300" style={{ width: `${row.value}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-300"
+                style={{ width: `${row.value ?? 0}%` }}
+              />
             </div>
           </div>
         ))}
       </div>
+      <p className="text-xs text-yowon-muted mt-4 font-mono">
+        Compared against {ranking?.projects_compared ?? 0} historical projects.
+      </p>
     </div>
   )
 }
@@ -282,6 +296,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
   const consensus = computeConsensus(vd?.agent_scores)
   const confidence = vd?.confidence ?? 0
   const riskLevel = vd?.risk_level ?? 'MEDIUM'
+  const ranking = vd?.ranking
   const heatmapCategories = radarData.map(d => ({ label: d.subject, score: d.score }))
   const barData = radarData.map(d => ({ name: d.subject, score: d.score }))
   const pdfId = demo ? null : projectId
@@ -384,17 +399,32 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
               <ReadinessGauge score={overallScore} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <ProjectDNA data={radarData} />
               <div className="glass-card">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="font-display font-bold text-lg">Global Ranking Indicator</h3>
                   <Trophy size={18} className="text-violet-300" />
                 </div>
-                <p className="text-5xl font-display font-bold text-yowon-text">Top {100 - percentile(overallScore)}%</p>
-                <p className="text-sm text-yowon-muted mt-3">Percentile estimate based on calibrated YOWON AI readiness score.</p>
+                <p className="text-4xl font-display font-bold text-yowon-text">{rankText(ranking?.global_rank)}</p>
+                <p className="text-sm text-yowon-muted mt-3">
+                  Compared Against: {ranking?.projects_compared ?? 0} Projects
+                </p>
               </div>
-              <BenchmarkComparison score={overallScore} consensus={consensus} />
+              <div className="glass-card">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-display font-bold text-lg">Category Ranking</h3>
+                  <Scale size={18} className="text-emerald-300" />
+                </div>
+                <p className="text-4xl font-display font-bold text-yowon-text">{rankText(ranking?.category_rank)}</p>
+                <p className="text-sm text-yowon-muted mt-3">
+                  Among {report.project_type ?? vd?.project_type ?? 'This Category'} Projects
+                </p>
+                <p className="text-xs text-yowon-muted/80 mt-1 font-mono">
+                  Compared Against: {ranking?.category_projects_compared ?? 0}
+                </p>
+              </div>
+              <BenchmarkComparison score={overallScore} consensus={consensus} ranking={ranking} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -172,6 +172,7 @@ export function enrichReport(raw: ReportData): ReportData {
     calibration_explanation: parsed?.calibration_explanation,
     project_type_justification: parsed?.project_type_justification,
     community_impact_score: parsed?.community_impact_score ?? 0,
+    ranking: parsed?.ranking,
   }
 
   return { ...raw, verdict_data }

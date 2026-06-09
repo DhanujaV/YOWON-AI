@@ -35,6 +35,7 @@ from tools.vector_store import store_project_context
 from crew.crew import run_evaluation
 from reports.report_generator import PDFGenerationError, generate_report, validate_pdf_file
 from scoring.rubrics import PROJECT_TYPES, normalize_project_type
+from utils.ranking_engine import build_ranking_payload, save_evaluation
 from progress import (
     PHASE_BUILD_CONTEXT,
     PHASE_EMBEDDINGS,
@@ -254,6 +255,24 @@ def _run_evaluation_background(project_id: str) -> None:
         verdict = results.get("verdict", {})
         if not verdict or verdict.get("overall_score") is None:
             raise RuntimeError("Evaluation produced no verdict â€” cannot persist results")
+
+        try:
+            score_for_ranking = verdict.get("overall_score", 0)
+            type_for_ranking = verdict.get("project_type") or project.project_type
+            save_evaluation(project.name, type_for_ranking, score_for_ranking)
+            verdict["ranking"] = build_ranking_payload(score_for_ranking, type_for_ranking)
+        except Exception:
+            logger.exception("Ranking update failed for %s", project_id)
+            verdict["ranking"] = {
+                "global_percentile": None,
+                "global_rank": "Insufficient Data",
+                "category_percentile": None,
+                "category_rank": "Insufficient Data",
+                "projects_compared": 0,
+                "category_projects_compared": 0,
+            }
+        results["verdict"] = verdict
+        results["chief_evaluation"] = json.dumps(verdict, indent=2)
 
         score_map = _agent_score_map(verdict)
 
@@ -480,6 +499,13 @@ async def get_report(project_id: str, db: Session = Depends(get_db)):
         else:
             logger.warning("Could not parse chief findings for project %s", project_id)
     public_verdict = _public_verdict_data(verdict_data)
+    if public_verdict and "ranking" not in public_verdict:
+        score = public_verdict.get("overall_score", report.overall_score if report else None)
+        if score is not None:
+            public_verdict["ranking"] = build_ranking_payload(
+                score,
+                public_verdict.get("project_type") or project.project_type,
+            )
     if "chief_evaluation" in eval_map:
         eval_map["chief_evaluation"]["findings"] = _chief_public_findings(public_verdict)
 
