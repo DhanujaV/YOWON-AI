@@ -1,7 +1,7 @@
 """
-agents/risk_impact_agent.py
+agents/guardian_agent.py
 
-Risk & Impact Agent
+Guardian agent
 
 Combines:
 1. Real-World Impact Assessment
@@ -69,8 +69,8 @@ Maximum 300 words.
 """
 
 
-def create_risk_impact_agent() -> Agent:
-    logger.info("[RISK] Agent initialized model=%s", get_model_name("specialist"))
+def create_guardian_agent() -> Agent:
+    logger.info("[GUARDIAN] Agent initialized model=%s", get_model_name("specialist"))
     return Agent(
         role="Real-World Impact Analyst & Veteran CTO Failure Analyst",
         goal=RISK_IMPACT_AGENT_GOAL,

@@ -11,10 +11,10 @@ ReportLab PDF generation.
 1. `POST /upload-project` stores metadata and uploaded file paths.
 2. `POST /evaluate/{id}` starts a background evaluation.
 3. The parser gathers GitHub, document, and static-security evidence.
-4. A deterministic brief and agent-specific slices feed five parallel specialists.
+4. A deterministic brief and agent-specific slices feed the five-agent Council.
 5. Pydantic validates or conservatively replaces malformed agent JSON.
 6. The score engine applies the selected rubric, evidence penalties, calibration, and confidence.
-7. The narrative agent summarizes the deterministic verdict without changing numeric scores.
+7. Insight summarizes the deterministic verdict without changing numeric scores.
 8. Evaluations and report metadata are persisted; JSON/PDF reports are served to React.
 
 ## Agent Workflow

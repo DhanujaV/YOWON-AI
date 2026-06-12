@@ -4,31 +4,31 @@ import AppShell from '../components/layout/AppShell'
 
 const JUDGES = [
   {
-    name: 'Technical Judge',
+    name: 'Forge',
     icon: Code2,
     color: '#38BDF8',
     finding: 'Reviews architecture, implementation quality, modularity, tests, and code evidence.',
   },
   {
-    name: 'Security Judge',
+    name: 'Sentinel',
     icon: ShieldCheck,
     color: '#7C3AED',
     finding: 'Assesses exposed secrets, dependency risk, authentication posture, and reliability hazards.',
   },
   {
-    name: 'Innovation Judge',
+    name: 'Visionary',
     icon: Brain,
     color: '#22D3EE',
     finding: 'Scores novelty, trained model artifacts, dataset evidence, differentiation, and creative execution.',
   },
   {
-    name: 'Presentation Judge',
+    name: 'Showcase',
     icon: Presentation,
     color: '#00FFA3',
     finding: 'Evaluates pitch clarity, documentation quality, roadmap quality, and executive readiness.',
   },
   {
-    name: 'Risk Judge',
+    name: 'Guardian',
     icon: Scale,
     color: '#00FFA3',
     finding: 'Forecasts impact, operational risk, failure modes, and confidence limits from available evidence.',
@@ -45,7 +45,7 @@ export default function JuryDashboardPage() {
             <span className="text-[10px] font-mono text-yowon-muted uppercase tracking-widest">AI Jury Dashboard</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-display font-bold text-yowon-text">
-            Specialist Judges
+            Council
           </h1>
           <p className="text-yowon-muted mt-3">
             A transparent view of the autonomous jury roles that synthesize project intelligence.

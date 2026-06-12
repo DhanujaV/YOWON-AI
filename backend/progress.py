@@ -24,14 +24,15 @@ AGENT_ORDER = [
 AGENT_LABELS = {
     "coordinator": "Coordinator",
     "brief": "Coordinator",
-    "technical": "Technical Review",
-    "engineering": "Technical Review",
-    "security": "Security Audit",
-    "presentation": "Presentation Review",
-    "innovation": "Innovation Analysis",
-    "risk": "Risk Assessment",
+    "technical": "Forge",
+    "engineering": "Forge",
+    "security": "Sentinel",
+    "presentation": "Showcase",
+    "innovation": "Visionary",
+    "risk": "Guardian",
     "scoring": "Score Engine",
-    "chief": "Chief Verdict",
+    "chief": "YOWON Prime",
+    "narrative": "Insight",
     "initializing": "Initializing",
     "done": "Complete",
 }
@@ -39,14 +40,15 @@ AGENT_LABELS = {
 AGENT_TASKS = {
     "coordinator": "Building evaluation context",
     "brief": "Building evaluation context",
-    "technical": "Technical review — architecture and code quality",
-    "engineering": "Technical review — architecture and code quality",
-    "security": "Security audit — OWASP and static scan findings",
-    "presentation": "Presentation review — pitch and documentation",
-    "innovation": "Innovation analysis — novelty and scalability",
-    "risk": "Risk assessment — impact and failure modes",
+    "technical": "Forge — architecture and code quality",
+    "engineering": "Forge — architecture and code quality",
+    "security": "Sentinel — OWASP and static scan findings",
+    "presentation": "Showcase — pitch and documentation",
+    "innovation": "Visionary — novelty and scalability",
+    "risk": "Guardian — impact and failure modes",
     "scoring": "Computing weighted scores and contradictions",
-    "chief": "Chief verdict — cross-exam and synthesis",
+    "chief": "YOWON Prime — cross-exam and synthesis",
+    "narrative": "Insight — narrative synthesis",
 }
 
 # Pre-pipeline phases (coordinator step)
@@ -76,6 +78,7 @@ _progress: dict[str, dict[str, Any]] = defaultdict(dict)
 def _empty_agent_state() -> dict[str, Any]:
     return {
         "status": "waiting",
+        "label": None,
         "started_at": None,
         "ended_at": None,
         "duration_sec": None,
@@ -168,6 +171,7 @@ def agent_start(
         agent_states = state.setdefault("agent_states", {n: _empty_agent_state() for n in AGENT_ORDER})
         agent_states[agent_key] = {
             "status": "running",
+            "label": label,
             "started_at": time.time(),
             "ended_at": None,
             "duration_sec": None,
@@ -187,6 +191,7 @@ def agent_start(
         events.append({
             "type": "agent_start",
             "agent": agent_key,
+            "label": label,
             "step": step,
             "model": model,
             "ts": time.time(),
@@ -215,6 +220,7 @@ def agent_complete(
         elapsed = duration_sec if duration_sec is not None else round(now - started, 2)
 
         entry["status"] = "failed" if error else "completed"
+        entry["label"] = label
         entry["ended_at"] = now
         entry["duration_sec"] = elapsed
         if error:
@@ -235,6 +241,7 @@ def agent_complete(
         events.append({
             "type": "agent_complete",
             "agent": agent_key,
+            "label": label,
             "duration_sec": elapsed,
             "error": error,
             "ts": now,

@@ -6,12 +6,12 @@ import type { AgentStatus } from '../../types'
 
 const JURY_AGENTS = [
   { icon: Brain, label: 'Brief', angle: 0 },
-  { icon: Cpu, label: 'Technical', angle: 51 },
-  { icon: Shield, label: 'Security', angle: 103 },
-  { icon: Presentation, label: 'Presentation', angle: 154 },
-  { icon: Lightbulb, label: 'Innovation', angle: 206 },
-  { icon: Globe, label: 'Risk', angle: 257 },
-  { icon: Gavel, label: 'Chief', angle: 309 },
+  { icon: Cpu, label: 'Forge', angle: 51 },
+  { icon: Shield, label: 'Sentinel', angle: 103 },
+  { icon: Presentation, label: 'Showcase', angle: 154 },
+  { icon: Lightbulb, label: 'Visionary', angle: 206 },
+  { icon: Globe, label: 'Guardian', angle: 257 },
+  { icon: Gavel, label: 'Prime', angle: 309 },
 ]
 
 interface JuryChamberProps {

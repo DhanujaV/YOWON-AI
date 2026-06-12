@@ -1,7 +1,7 @@
 """
-agents/innovation_scalability_agent.py
+agents/visionary_agent.py
 
-Innovation & Scalability Agent
+Visionary agent
 
 Combines:
 1. Innovation Assessment
@@ -57,8 +57,8 @@ Maximum 250 words.
 """
 
 
-def create_innovation_scalability_agent() -> Agent:
-    logger.info("[INNOVATION] Agent initialized model=%s", get_model_name("specialist"))
+def create_visionary_agent() -> Agent:
+    logger.info("[VISIONARY] Agent initialized model=%s", get_model_name("specialist"))
     return Agent(
         role="Technology Innovation Analyst & Distributed Systems Architect",
         goal=INNOVATION_SCALABILITY_AGENT_GOAL,

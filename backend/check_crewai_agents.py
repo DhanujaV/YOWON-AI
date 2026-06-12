@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from crewai import BaseLLM
 
-from agents.narrative_agent import create_narrative_agent
-from agents.specialist_agents import (
+from agents.insight_agent import create_insight_agent
+from agents.council_agents import (
     create_innovation_agent,
     create_presentation_agent,
     create_risk_agent,
@@ -16,12 +16,12 @@ from agents.specialist_agents import (
 
 def main() -> None:
     factories = [
-        ("TECHNICAL", create_technical_agent),
-        ("SECURITY", create_security_agent),
-        ("INNOVATION", create_innovation_agent),
-        ("PRESENTATION", create_presentation_agent),
-        ("RISK", create_risk_agent),
-        ("NARRATIVE", create_narrative_agent),
+        ("FORGE", create_technical_agent),
+        ("SENTINEL", create_security_agent),
+        ("VISIONARY", create_innovation_agent),
+        ("SHOWCASE", create_presentation_agent),
+        ("GUARDIAN", create_risk_agent),
+        ("INSIGHT", create_insight_agent),
     ]
     for label, factory in factories:
         agent = factory()

@@ -1,7 +1,7 @@
 """
-agents/engineering_agent.py
+agents/forge_agent.py
 
-Engineering Agent
+Forge agent
 
 Combines:
 1. Technical Evaluation
@@ -54,8 +54,8 @@ Maximum 250 words.
 """
 
 
-def create_engineering_agent() -> Agent:
-    logger.info("[ENGINEERING] Agent initialized model=%s", get_model_name("specialist"))
+def create_forge_agent() -> Agent:
+    logger.info("[FORGE] Agent initialized model=%s", get_model_name("specialist"))
     return Agent(
         role="Principal Software Engineer & Application Security Expert",
         goal=ENGINEERING_AGENT_GOAL,

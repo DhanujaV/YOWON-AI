@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root))
 sys.path.insert(0, str(root / 'backend'))
 modules = [
-    'backend.agents.chief_evaluation_agent',
+    'backend.agents.yowon_prime_agent',
     'backend.reports.report_generator',
     'backend.tasks.evaluation_tasks',
 ]

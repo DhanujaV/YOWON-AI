@@ -1,4 +1,4 @@
-"""Specialist jury agents — single-pass JSON evaluators for local Ollama."""
+"""Council agents - single-pass JSON evaluators for local Ollama."""
 
 from crewai import Agent
 
@@ -43,7 +43,7 @@ def _agent(
 
 def create_technical_agent(*, use_fallback: bool = False) -> Agent:
     return _agent(
-        "TECHNICAL",
+        "FORGE",
         "Principal Software Engineer",
         "Return JSON with technical_score, strengths, weaknesses, risks, confidence.",
         "You assess architecture, code quality, and deployment readiness.",
@@ -53,7 +53,7 @@ def create_technical_agent(*, use_fallback: bool = False) -> Agent:
 
 def create_security_agent(*, use_fallback: bool = False) -> Agent:
     return _agent(
-        "SECURITY",
+        "SENTINEL",
         "Application Security Auditor",
         "Return JSON with security_score, risk_level, critical_findings, confidence.",
         "You audit OWASP risks, secrets, and dependency issues from static scan data.",
@@ -63,7 +63,7 @@ def create_security_agent(*, use_fallback: bool = False) -> Agent:
 
 def create_innovation_agent(*, use_fallback: bool = False) -> Agent:
     return _agent(
-        "INNOVATION",
+        "VISIONARY",
         "Technology Innovation Analyst",
         "Return JSON with innovation_score, scalability_score, differentiators, scalability_risk, confidence.",
         "You assess novelty, differentiation, and scale readiness.",
@@ -73,7 +73,7 @@ def create_innovation_agent(*, use_fallback: bool = False) -> Agent:
 
 def create_presentation_agent(*, use_fallback: bool = False) -> Agent:
     return _agent(
-        "PRESENTATION",
+        "SHOWCASE",
         "Pitch Coach",
         "Return JSON with presentation_score, strengths, improvements, confidence.",
         "You evaluate pitch clarity, problem/solution narrative, and deck quality.",
@@ -83,7 +83,7 @@ def create_presentation_agent(*, use_fallback: bool = False) -> Agent:
 
 def create_risk_agent(*, use_fallback: bool = False) -> Agent:
     return _agent(
-        "RISK",
+        "GUARDIAN",
         "Deployment Risk Analyst",
         "Return JSON with impact_score, failure_modes, top_risks, confidence.",
         "You predict real-world impact and failure modes under production stress.",

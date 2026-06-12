@@ -11,7 +11,7 @@ import ScanLine from '../components/effects/ScanLine'
 import NeuralOverlay from '../components/effects/NeuralOverlay'
 
 const STATS = [
-  { value: '10', label: 'AI Specialists', icon: Layers, color: 'text-cyan-300' },
+  { value: '8', label: 'Council Agents', icon: Layers, color: 'text-cyan-300' },
   { value: '6', label: 'Readiness Dimensions', icon: FileSearch, color: 'text-emerald-300' },
   { value: '<5m', label: 'To Verdict', icon: Clock, color: 'text-violet-300' },
 ]
@@ -26,7 +26,7 @@ const FEATURES = [
   },
   {
     icon: Shield,
-    title: 'Security & Risk Jury',
+    title: 'Sentinel & Guardian',
     desc: 'OWASP-style review plus failure-mode forecasting before you ship.',
     gradient: 'from-emerald-400/15 to-emerald-400/5',
     iconColor: 'text-emerald-300',
@@ -47,7 +47,7 @@ const DNA = [
   { label: 'Evidence', value: 72 },
 ]
 
-const JUDGE_FLOW = ['Technical', 'Security', 'Innovation', 'Risk', 'Chief Verdict']
+const JUDGE_FLOW = ['Forge', 'Sentinel', 'Visionary', 'Guardian', 'YOWON Prime']
 
 export default function LandingPage() {
   return (
@@ -261,7 +261,7 @@ export default function LandingPage() {
               Your AI Evaluation Jury
             </h2>
             <p className="text-yowon-muted max-w-lg mx-auto">
-              Ten specialized agents analyze every dimension of deployment readiness in parallel.
+              The Council analyzes every dimension of deployment readiness in parallel.
             </p>
           </motion.div>
           <AgentShowcase />

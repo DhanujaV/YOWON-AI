@@ -9,27 +9,27 @@ const DEMO_RAW: ReportData = {
   verdict: 'ACCEPT',
   report_id: 'demo-report',
   evaluations: {
-    engineering: {
+    forge: {
       score: 85,
       findings:
         'STRENGTHS:\n- Clean microservices architecture with proper separation\n- Comprehensive test coverage at 78%\n- Well-documented API contracts\n\nCONCERNS:\n- Missing circuit breaker patterns on external calls',
     },
-    innovation_scalability: {
+    visionary: {
       score: 80,
       findings:
         'INNOVATION:\n- Novel multi-agent orchestration approach\n- Real-time evaluation pipeline\n\nSCALABILITY:\n- Horizontal scaling ready with stateless workers\n- Redis caching layer recommended for 10K+ concurrent users',
     },
-    ppt: {
+    showcase: {
       score: 88,
       findings:
         'PRESENTATION QUALITY:\n- Clear problem statement and market sizing\n- Strong demo narrative with live metrics\n- Professional visual design throughout deck',
     },
-    risk_impact: {
+    guardian: {
       score: 76,
       findings:
         'IMPACT ANALYSIS:\n- Addresses critical deployment readiness gap\n- Enterprise security teams as primary buyers\n\nRISK FACTORS:\n- Dependency on third-party LLM availability\n- Data residency requirements for EU clients',
     },
-    chief_evaluation: {
+    yowon_prime: {
       score: 82,
       findings: JSON.stringify({
         overall_score: 82,

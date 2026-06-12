@@ -5,13 +5,13 @@ import type { ProgressEvent } from '../../types'
 const AGENT_LABELS: Record<string, string> = {
   coordinator: 'Coordinator',
   brief: 'Coordinator',
-  technical: 'Engineering',
-  security: 'Security',
-  presentation: 'Presentation',
-  innovation: 'Innovation',
-  risk: 'Risk',
+  technical: 'Forge',
+  security: 'Sentinel',
+  presentation: 'Showcase',
+  innovation: 'Visionary',
+  risk: 'Guardian',
   scoring: 'Score Engine',
-  chief: 'Chief Evaluator',
+  chief: 'YOWON Prime',
 }
 
 interface EvaluationTimelineProps {
@@ -52,7 +52,7 @@ export default function EvaluationTimeline({ events = [], elapsedSeconds = 0 }: 
       </div>
       <div className="space-y-2 max-h-40 overflow-y-auto">
         {displayEvents.slice(-12).map((event, i) => {
-          const label = AGENT_LABELS[event.agent] ?? event.agent
+          const label = event.label ?? AGENT_LABELS[event.agent] ?? event.agent
           const isComplete = event.type === 'agent_complete'
           const isFailed = isComplete && !!event.error
 

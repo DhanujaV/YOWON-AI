@@ -40,6 +40,11 @@ export interface AgentScores {
   ppt?: number
 
   risk_impact?: number
+  forge?: number
+  sentinel?: number
+  visionary?: number
+  showcase?: number
+  guardian?: number
 
 }
 
@@ -160,6 +165,7 @@ export interface UploadProjectPayload {
 export interface AgentStateEntry {
 
   status: AgentStatus | 'failed'
+  label?: string | null
 
   started_at?: number | null
 
@@ -180,6 +186,7 @@ export interface ProgressEvent {
   type: 'agent_start' | 'agent_complete'
 
   agent: string
+  label?: string
 
   step?: number
 

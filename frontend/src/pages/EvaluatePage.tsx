@@ -16,12 +16,12 @@ import type { AgentStatus } from '../types'
 
 const PIPELINE = [
   { id: 'coordinator', label: 'Coordinator', desc: 'Parsing inputs and building evaluation context', icon: Brain, color: '#00E5FF' },
-  { id: 'technical', label: 'Engineering Agent', desc: 'Analyzing architecture and code quality', icon: Cpu, color: '#00E5FF' },
-  { id: 'security', label: 'Security Agent', desc: 'Auditing OWASP risks and static scan findings', icon: Shield, color: '#EF4444' },
-  { id: 'presentation', label: 'Presentation Agent', desc: 'Reviewing pitch deck and documentation', icon: Presentation, color: '#7C3AED' },
-  { id: 'innovation', label: 'Innovation Agent', desc: 'Assessing novelty and scalability readiness', icon: Lightbulb, color: '#00FFA3' },
-  { id: 'risk', label: 'Risk Agent', desc: 'Forecasting impact and failure modes', icon: Globe, color: '#00FFA3' },
-  { id: 'chief', label: 'Chief Evaluator', desc: 'Cross-examining specialists and rendering verdict', icon: Gavel, color: '#7C3AED' },
+  { id: 'technical', label: 'Forge', desc: 'Analyzing architecture and code quality', icon: Cpu, color: '#00E5FF' },
+  { id: 'security', label: 'Sentinel', desc: 'Auditing OWASP risks and static scan findings', icon: Shield, color: '#EF4444' },
+  { id: 'presentation', label: 'Showcase', desc: 'Reviewing pitch deck and documentation', icon: Presentation, color: '#7C3AED' },
+  { id: 'innovation', label: 'Visionary', desc: 'Assessing novelty and scalability readiness', icon: Lightbulb, color: '#00FFA3' },
+  { id: 'risk', label: 'Guardian', desc: 'Forecasting impact and failure modes', icon: Globe, color: '#00FFA3' },
+  { id: 'chief', label: 'YOWON Prime', desc: 'Cross-examining the Council and rendering verdict', icon: Gavel, color: '#7C3AED' },
 ]
 
 const SIMULATION_STATS = [

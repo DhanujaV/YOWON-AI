@@ -1,7 +1,7 @@
 """
-agents/ppt_agent.py
+agents/showcase_agent.py
 
-Presentation Evaluation Agent
+Showcase agent
 
 Optimized for local Ollama models.
 """
@@ -57,8 +57,8 @@ Maximum 200 words.
 """
 
 
-def create_ppt_agent() -> Agent:
-    logger.info("[PRESENTATION] Agent initialized model=%s", get_model_name("specialist"))
+def create_showcase_agent() -> Agent:
+    logger.info("[SHOWCASE] Agent initialized model=%s", get_model_name("specialist"))
     return Agent(
         role="Pitch Coach & Presentation Evaluator",
         goal=PPT_AGENT_GOAL,

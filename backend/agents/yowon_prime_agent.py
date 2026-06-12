@@ -1,4 +1,4 @@
-"""Chief Evaluation Agent — synthesis and deployment verdict."""
+"""YOWON Prime agent - synthesis and deployment verdict."""
 
 from crewai import Agent
 from config import CHIEF_MAX_EXECUTION_TIME
@@ -17,9 +17,9 @@ Do not use tools. One response only.
 """
 
 
-def create_chief_evaluation_agent(*, use_fallback: bool = False) -> Agent:
+def create_yowon_prime_agent(*, use_fallback: bool = False) -> Agent:
     model_name = get_model_name('chief', use_fallback=use_fallback)
-    logger.info('[CHIEF] Agent initialized model=%s use_fallback=%s', model_name, use_fallback)
+    logger.info('[YOWON PRIME] Agent initialized model=%s use_fallback=%s', model_name, use_fallback)
     return Agent(
         role="Chief Evaluation Officer",
         goal="Generate executive_summary, strengths, weaknesses, recommended_fixes, roadmap, deployment_roadmap.",

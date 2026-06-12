@@ -4,8 +4,8 @@ from typing import Any
 
 from crewai import Agent, BaseLLM, Crew, Process, Task
 
-from agents.narrative_agent import create_narrative_agent
-from agents.specialist_agents import (
+from agents.insight_agent import create_insight_agent
+from agents.council_agents import (
     create_innovation_agent,
     create_presentation_agent,
     create_risk_agent,
@@ -23,7 +23,7 @@ def test_crewai_llm_initialization_returns_basellm():
     assert get_model_name("specialist") in llm.model
 
 
-def test_specialist_agents_use_crewai_basellm():
+def test_council_agents_use_crewai_basellm():
     agents = [
         create_technical_agent(),
         create_security_agent(),
@@ -35,8 +35,8 @@ def test_specialist_agents_use_crewai_basellm():
     assert all(isinstance(agent.llm, BaseLLM) for agent in agents)
 
 
-def test_narrative_agent_uses_crewai_basellm():
-    agent = create_narrative_agent()
+def test_insight_agent_uses_crewai_basellm():
+    agent = create_insight_agent()
     assert isinstance(agent, Agent)
     assert isinstance(agent.llm, BaseLLM)
 

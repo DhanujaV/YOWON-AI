@@ -107,7 +107,7 @@ function deriveWeaknesses(evaluations: Record<string, Evaluation>): string[] {
 }
 
 export function enrichReport(raw: ReportData): ReportData {
-  const chief = raw.evaluations?.chief_evaluation
+  const chief = raw.evaluations?.yowon_prime ?? raw.evaluations?.chief_evaluation
   const parsed = raw.verdict_data
     ? (raw.verdict_data as VerdictData)
     : chief?.findings
@@ -203,11 +203,11 @@ function buildAgentScores(
     }
   }
 
-  const technical = scores.technical ?? scores.engineering
-  const security = scores.security
-  const innovation = scores.innovation ?? scores.innovation_scalability
-  const presentation = scores.presentation ?? scores.ppt
-  const impact = scores.impact ?? scores.risk ?? scores.risk_impact
+  const technical = scores.technical ?? scores.forge ?? scores.engineering
+  const security = scores.security ?? scores.sentinel
+  const innovation = scores.innovation ?? scores.visionary ?? scores.innovation_scalability
+  const presentation = scores.presentation ?? scores.showcase ?? scores.ppt
+  const impact = scores.impact ?? scores.guardian ?? scores.risk ?? scores.risk_impact
   const scalability = scores.scalability
 
   return {
@@ -218,9 +218,14 @@ function buildAgentScores(
     presentation,
     impact,
     engineering: technical,
+    forge: technical,
+    sentinel: security,
     innovation_scalability: innovation,
+    visionary: innovation,
     ppt: presentation,
+    showcase: presentation,
     risk_impact: impact,
+    guardian: impact,
   }
 }
 
@@ -232,8 +237,17 @@ function ensureAllDimensions(
   const keys = ['technical', 'security', 'scalability', 'innovation', 'presentation', 'impact'] as const
   for (const key of keys) {
     if (result[key] == null) {
-      const evKey = key === 'impact' ? 'risk' : key
-      const ev = evaluations[evKey]
+      const evKey = key === 'impact' ? 'guardian' : key
+      const legacyKey = key === 'impact' ? 'risk' : key
+      const aliasKey = {
+        technical: 'forge',
+        security: 'sentinel',
+        innovation: 'visionary',
+        presentation: 'showcase',
+        scalability: 'scalability',
+        impact: 'risk_impact',
+      }[key]
+      const ev = evaluations[evKey] ?? evaluations[aliasKey] ?? evaluations[legacyKey]
       if (ev?.score != null) result[key] = ev.score
     }
   }
@@ -243,12 +257,12 @@ function ensureAllDimensions(
 export function getRadarData(agentScores: VerdictData['agent_scores']) {
   if (!agentScores) return []
   const map = [
-    { key: 'technical', label: 'Technical' },
-    { key: 'security', label: 'Security' },
+    { key: 'technical', label: 'Forge' },
+    { key: 'security', label: 'Sentinel' },
     { key: 'scalability', label: 'Scalability' },
-    { key: 'innovation', label: 'Innovation' },
-    { key: 'presentation', label: 'Presentation' },
-    { key: 'impact', label: 'Impact' },
+    { key: 'innovation', label: 'Visionary' },
+    { key: 'presentation', label: 'Showcase' },
+    { key: 'impact', label: 'Guardian' },
   ]
   return map
     .filter(m => agentScores[m.key as keyof typeof agentScores] != null)

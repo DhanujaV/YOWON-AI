@@ -11,9 +11,8 @@ from typing import Any, Callable
 
 from crewai import Agent, Crew, Process, Task
 
-from agents.chief_evaluation_agent import create_chief_evaluation_agent
-from agents.narrative_agent import create_narrative_agent
-from agents.specialist_agents import (
+from agents.insight_agent import create_insight_agent
+from agents.council_agents import (
     create_innovation_agent,
     create_presentation_agent,
     create_risk_agent,
@@ -66,37 +65,47 @@ from validation.schemas import (
 logger = get_logger(__name__)
 _executor = ThreadPoolExecutor(max_workers=max(1, OLLAMA_PARALLEL))
 
+AGENT_DISPLAY_NAMES = {
+    "technical": "Forge",
+    "security": "Sentinel",
+    "presentation": "Showcase",
+    "innovation": "Visionary",
+    "risk": "Guardian",
+    "narrative": "Insight",
+    "chief": "YOWON Prime",
+}
+
 FALLBACKS: dict[str, dict[str, Any]] = {
     "technical": {
         "technical_score": FAILED_AGENT_SCORE,
         "strengths": [],
-        "weaknesses": ["Engineering agent failed — manual technical review required"],
+        "weaknesses": ["Forge failed — manual technical review required"],
         "risks": ["Incomplete automated technical assessment"],
         "confidence": 0.15,
     },
     "security": {
         "security_score": FAILED_AGENT_SCORE,
         "risk_level": "MEDIUM",
-        "critical_findings": ["Security agent failed — run manual security audit"],
+        "critical_findings": ["Sentinel failed — run manual security audit"],
         "confidence": 0.15,
     },
     "innovation": {
         "innovation_score": FAILED_AGENT_SCORE,
         "scalability_score": FAILED_AGENT_SCORE,
         "differentiators": [],
-        "scalability_risk": "Unable to assess — agent failure",
+        "scalability_risk": "Unable to assess — Visionary failure",
         "confidence": 0.15,
     },
     "presentation": {
         "presentation_score": FAILED_AGENT_SCORE,
         "strengths": [],
-        "improvements": ["Presentation agent failed — provide deck for manual review"],
+        "improvements": ["Showcase failed — provide deck for manual review"],
         "confidence": 0.15,
         "status": "FAILED",
     },
     "risk": {
         "impact_score": FAILED_AGENT_SCORE,
-        "failure_modes": ["Risk agent failed — insufficient automated assessment"],
+        "failure_modes": ["Guardian failed — insufficient automated assessment"],
         "top_risks": ["Manual risk review required"],
         "confidence": 0.15,
     },
@@ -209,7 +218,7 @@ def _run_specialist(
         project_id,
         name,
         model=model_name,
-        message=f"[{name.upper()}] Specialist review started",
+        message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Council review started",
     )
 
     parse_source = "fallback"
@@ -287,7 +296,7 @@ def _run_specialist(
             }.get(name, "score")
             score_val = getattr(report, score_field, FAILED_AGENT_SCORE)
 
-            msg = f"[{name.upper()}] Completed — raw_score={score_val}/100 ({duration}s) source={parse_source}"
+            msg = f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Completed — raw_score={score_val}/100 ({duration}s) source={parse_source}"
             if parse_source != "llm":
                 msg += " [parse degraded]"
 
@@ -304,7 +313,7 @@ def _run_specialist(
             name,
             duration_sec=duration,
             error=str(exc),
-            message=f"[{name.upper()}] Failed — {exc}",
+            message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Failed — {exc}",
         )
         return name, report, json.dumps(FALLBACKS[name]), str(exc)
 
@@ -322,7 +331,7 @@ def _format_report_text(
         calibrated_scores = calibrated_scores or {}
         if name == "technical":
             payload["technical_score"] = calibrated_scores.get("technical", payload.get("technical_score", 0))
-            return _professional_section("Technical Analysis", [
+            return _professional_section("Forge Analysis", [
                 ("Technical Score", f"{payload.get('technical_score', 0)}/100"),
                 ("Strengths", payload.get("strengths", [])),
                 ("Weaknesses", payload.get("weaknesses", [])),
@@ -331,7 +340,7 @@ def _format_report_text(
             ])
         if name == "security":
             payload["security_score"] = calibrated_scores.get("security", payload.get("security_score", 0))
-            return _professional_section("Security Analysis", [
+            return _professional_section("Sentinel Analysis", [
                 ("Security Score", f"{payload.get('security_score', 0)}/100"),
                 ("Risk Level", payload.get("risk_level", "MEDIUM")),
                 ("Findings", payload.get("critical_findings", [])),
@@ -341,7 +350,7 @@ def _format_report_text(
         if name == "innovation":
             payload["innovation_score"] = calibrated_scores.get("innovation", payload.get("innovation_score", 0))
             payload["scalability_score"] = calibrated_scores.get("scalability", payload.get("scalability_score", 0))
-            return _professional_section("Innovation Analysis", [
+            return _professional_section("Visionary Analysis", [
                 ("Innovation Score", f"{payload.get('innovation_score', 0)}/100"),
                 ("Scalability Score", f"{payload.get('scalability_score', 0)}/100"),
                 ("Differentiators", payload.get("differentiators", [])),
@@ -351,7 +360,7 @@ def _format_report_text(
             ])
         if name == "presentation":
             payload["presentation_score"] = calibrated_scores.get("presentation", payload.get("presentation_score", 0))
-            return _professional_section("Presentation Analysis", [
+            return _professional_section("Showcase Analysis", [
                 ("Presentation Score", f"{payload.get('presentation_score', 0)}/100"),
                 ("Strengths", payload.get("strengths", [])),
                 ("Improvements", payload.get("improvements", [])),
@@ -359,7 +368,7 @@ def _format_report_text(
             ])
         if name == "risk":
             payload["impact_score"] = calibrated_scores.get("impact", payload.get("impact_score", 0))
-            return _professional_section("Impact Analysis", [
+            return _professional_section("Guardian Analysis", [
                 ("Impact Score", f"{payload.get('impact_score', 0)}/100"),
                 ("Top Risks", payload.get("top_risks", [])),
                 ("Expected Impact", payload.get("failure_modes", [])),
@@ -497,7 +506,7 @@ def run_evaluation(
                     project_id,
                     name,
                     error="pool timeout",
-                    message=f"[{name.upper()}] Pool timeout — fallback score={FAILED_AGENT_SCORE}",
+                    message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Pool timeout — fallback score={FAILED_AGENT_SCORE}",
                 )
 
     technical: TechnicalReport = reports["technical"]
@@ -543,14 +552,14 @@ def run_evaluation(
     )[:3500]
 
     # Compute deterministic numeric verdict and pass only numeric summary to chief for narrative synthesis
-    # Narrative agent synthesizes qualitative narrative only (scores already computed)
+    # Insight synthesizes qualitative narrative only (scores already computed)
     narrative_model = get_model_name("chief")
     narrative_start = time.perf_counter()
     agent_start(
         project_id,
         "narrative",
         model=narrative_model,
-        message="[NARRATIVE] Generating narrative from computed scores",
+        message="[INSIGHT] Generating narrative from computed scores",
     )
 
     numeric_payload = {
@@ -562,8 +571,8 @@ def run_evaluation(
     # key findings: short cross-exam or top lines from specialists
     key_findings = " | ".join((technical.strengths or [])[:2] + (security.critical_findings or [])[:2] + (innovation.differentiators or [])[:2])
 
-    narrative_agent = create_narrative_agent()
-    narrative_task = create_narrative_task(narrative_agent, numeric_payload, key_findings)
+    insight_agent = create_insight_agent()
+    narrative_task = create_narrative_task(insight_agent, numeric_payload, key_findings)
 
     narrative_raw = ""
     narrative_parse_source = "computed"
@@ -575,7 +584,7 @@ def run_evaluation(
             model=narrative_model,
         ):
             narrative_raw = _run_agent_llm(
-                agent=narrative_agent,
+                agent=insight_agent,
                 task=narrative_task,
                 role="chief",
                 label="narrative:gen",
@@ -583,10 +592,10 @@ def run_evaluation(
                 use_fallback=False,
             )
             if not narrative_raw or len(narrative_raw.strip()) == 0:
-                raise RuntimeError("Narrative agent returned empty response")
+                raise RuntimeError("Insight returned empty response")
             narrative_parse_source = "llm"
     except Exception as exc:
-        logger.exception("[%s] Narrative agent failed — using computed fallback narrative", project_id[:8])
+        logger.exception("[%s] Insight failed — using computed fallback narrative", project_id[:8])
         failures["narrative"] = str(exc)
         narrative_raw = json.dumps(
             {
@@ -625,7 +634,7 @@ def run_evaluation(
         duration_sec=narrative_duration,
         error=failures.get("narrative"),
         message=(
-            f"[NARRATIVE] Verdict={verdict_dict['verdict']} "
+            f"[INSIGHT] Verdict={verdict_dict['verdict']} "
             f"score={verdict_dict['overall_score']}/100 source={narrative_parse_source}"
         ),
     )
@@ -653,13 +662,13 @@ def run_evaluation(
         "presentation": _format_report_text("presentation", presentation, raw_outputs["presentation"], raw_score_map, calibrated_score_map, calibration_reasons),
         "risk": _format_report_text("risk", risk, raw_outputs["risk"], raw_score_map, calibrated_score_map, calibration_reasons),
         "ppt": _format_report_text("presentation", presentation, raw_outputs["presentation"], raw_score_map, calibrated_score_map, calibration_reasons),
-        "impact": _professional_section("Impact Analysis", [
+        "impact": _professional_section("Guardian Analysis", [
             ("Impact Score", f"{calibrated_score_map['impact']}/100"),
             ("Top Risks", risk.top_risks),
             ("Expected Impact", risk.failure_modes),
         ]),
         "failure": "\n".join(f"- {m}" for m in risk.failure_modes),
-        "scalability": _professional_section("Scalability Assessment", [
+        "scalability": _professional_section("Visionary Scalability Assessment", [
             ("Scalability Score", f"{calibrated_score_map['scalability']}/100"),
             ("Risks", [innovation.scalability_risk] if innovation.scalability_risk else []),
             ("Recommendations", ["Validate capacity assumptions with load tests and deployment evidence."]),

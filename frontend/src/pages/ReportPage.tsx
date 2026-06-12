@@ -31,17 +31,23 @@ import { phaseDeploymentRoadmap } from '../utils/listNormalizer'
 import type { Evaluation, RankingData, ReportData } from '../types'
 
 const AGENT_META: Record<string, { icon: ElementType; label: string; color: string }> = {
-  engineering: { icon: Cpu, label: 'Engineering', color: '#00E5FF' },
-  innovation_scalability: { icon: TrendingUp, label: 'Innovation & Scale', color: '#00FFA3' },
-  ppt: { icon: Star, label: 'Presentation', color: '#7C3AED' },
-  risk_impact: { icon: Globe, label: 'Risk & Impact', color: '#00FFA3' },
-  risk: { icon: Globe, label: 'Risk & Impact', color: '#00FFA3' },
-  chief_evaluation: { icon: Shield, label: 'Chief Evaluation', color: '#7C3AED' },
-  technical: { icon: Cpu, label: 'Technical', color: '#00E5FF' },
-  security: { icon: Lock, label: 'Security', color: '#EF4444' },
-  presentation: { icon: Star, label: 'Presentation', color: '#7C3AED' },
-  innovation: { icon: Zap, label: 'Innovation', color: '#00FFA3' },
-  impact: { icon: Globe, label: 'Impact', color: '#00FFA3' },
+  forge: { icon: Cpu, label: 'Forge', color: '#00E5FF' },
+  sentinel: { icon: Lock, label: 'Sentinel', color: '#EF4444' },
+  visionary: { icon: Zap, label: 'Visionary', color: '#00FFA3' },
+  showcase: { icon: Star, label: 'Showcase', color: '#7C3AED' },
+  guardian: { icon: Globe, label: 'Guardian', color: '#00FFA3' },
+  yowon_prime: { icon: Shield, label: 'YOWON Prime', color: '#7C3AED' },
+  engineering: { icon: Cpu, label: 'Forge', color: '#00E5FF' },
+  innovation_scalability: { icon: TrendingUp, label: 'Visionary', color: '#00FFA3' },
+  ppt: { icon: Star, label: 'Showcase', color: '#7C3AED' },
+  risk_impact: { icon: Globe, label: 'Guardian', color: '#00FFA3' },
+  risk: { icon: Globe, label: 'Guardian', color: '#00FFA3' },
+  chief_evaluation: { icon: Shield, label: 'YOWON Prime', color: '#7C3AED' },
+  technical: { icon: Cpu, label: 'Forge', color: '#00E5FF' },
+  security: { icon: Lock, label: 'Sentinel', color: '#EF4444' },
+  presentation: { icon: Star, label: 'Showcase', color: '#7C3AED' },
+  innovation: { icon: Zap, label: 'Visionary', color: '#00FFA3' },
+  impact: { icon: Globe, label: 'Guardian', color: '#00FFA3' },
   failure: { icon: AlertTriangle, label: 'Failure Risk', color: '#F97316' },
   scalability: { icon: TrendingUp, label: 'Scalability', color: '#00E5FF' },
   cross_exam: { icon: Activity, label: 'Cross Exam', color: '#7C3AED' },
@@ -54,7 +60,7 @@ const REPORT_SECTIONS: Array<{ id: string; label: string; icon: ElementType }> =
   { id: 'evaluation-context', label: 'Evaluation Context', icon: FileText },
   { id: 'code-intelligence', label: 'Code Intelligence', icon: Cpu },
   { id: 'repository-analysis', label: 'Repository Analysis', icon: Gauge },
-  { id: 'security', label: 'Security', icon: Shield },
+  { id: 'security', label: 'Sentinel', icon: Shield },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'agent-reports', label: 'Agent Reports', icon: Activity },
   { id: 'recommendations', label: 'Recommendations', icon: Wrench },
@@ -62,7 +68,7 @@ const REPORT_SECTIONS: Array<{ id: string; label: string; icon: ElementType }> =
 ]
 
 const QUICK_ACTIONS = [
-  { id: 'security', label: 'Jump to Security', icon: Shield },
+  { id: 'security', label: 'Jump to Sentinel', icon: Shield },
   { id: 'agent-reports', label: 'Jump to Agent Reports', icon: Activity },
   { id: 'recommendations', label: 'Jump to Recommendations', icon: Wrench },
   { id: 'deployment-roadmap', label: 'Jump to Roadmap', icon: Map },
@@ -80,7 +86,7 @@ function ProjectDNA({ data }: { data: { subject: string; score: number }[] }) {
   const items = data.length ? data.slice(0, 6) : [
     { subject: 'Evidence', score: 30 },
     { subject: 'Architecture', score: 30 },
-    { subject: 'Security', score: 30 },
+    { subject: 'Sentinel', score: 30 },
   ]
   return (
     <div className="glass-card">
@@ -816,20 +822,20 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                   </div>
                 </DashboardSection>
 
-                <DashboardSection id="security" title="Security" icon={Shield} accent="red">
+                <DashboardSection id="security" title="Sentinel" icon={Shield} accent="red">
                   <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                     <ThreatRadar riskLevel={riskLevel} />
                     <div className="glass-card xl:col-span-2">
-                      <h3 className="font-display font-bold text-lg mb-4">Security Signal</h3>
+                      <h3 className="font-display font-bold text-lg mb-4">Sentinel Signal</h3>
                       <div className="grid sm:grid-cols-3 gap-3">
                         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
                           <p className="text-[10px] font-mono uppercase tracking-widest text-yowon-muted">Risk Level</p>
                           <p className="mt-2 font-display text-xl font-bold text-red-300">{riskLevel}</p>
                         </div>
                         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-                          <p className="text-[10px] font-mono uppercase tracking-widest text-yowon-muted">Security Score</p>
+                          <p className="text-[10px] font-mono uppercase tracking-widest text-yowon-muted">Sentinel Score</p>
                           <p className="mt-2 font-display text-xl font-bold text-cyan-300">
-                            {Math.round(vd?.agent_scores?.security ?? report.evaluations.security?.score ?? 0)}/100
+                            {Math.round(vd?.agent_scores?.security ?? report.evaluations.sentinel?.score ?? report.evaluations.security?.score ?? 0)}/100
                           </p>
                         </div>
                         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
@@ -845,7 +851,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div className="glass-card">
                       <h3 className="text-xs font-mono text-yowon-muted uppercase tracking-widest mb-4">
-                        Agent Score Radar
+                        Council Score Radar
                       </h3>
                       <ResponsiveContainer width="100%" height={260}>
                         <RadarChart data={radarData}>
@@ -895,7 +901,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                   {vd?.contradictions && vd.contradictions.length > 0 && (
                     <div className="glass-card border border-purple-500/20 p-5">
                       <h3 className="text-xs font-mono text-purple-300 uppercase tracking-widest mb-3">
-                        Chief Cross-Examination
+                        YOWON Prime Cross-Examination
                       </h3>
                       <ul className="space-y-2">
                         {vd.contradictions.map((c, i) => (

@@ -205,11 +205,17 @@ def _agent_score_map(verdict: dict) -> dict[str, float]:
     scores = verdict.get("agent_scores") or {}
     overall = verdict.get("overall_score", 0)
     return {
+        "forge": float(scores.get("technical", 0)),
         "technical": float(scores.get("technical", 0)),
+        "sentinel": float(scores.get("security", 0)),
         "security": float(scores.get("security", 0)),
+        "showcase": float(scores.get("presentation", 0)),
         "presentation": float(scores.get("presentation", 0)),
+        "visionary": float(scores.get("innovation", 0)),
         "innovation": float(scores.get("innovation", 0)),
+        "guardian": float(scores.get("impact", 0)),
         "risk": float(scores.get("impact", 0)),
+        "yowon_prime": float(overall),
         "chief_evaluation": float(overall),
     }
 
@@ -233,7 +239,7 @@ def _public_verdict_data(verdict: dict) -> dict:
 def _chief_public_findings(verdict: dict) -> str:
     public = _public_verdict_data(verdict)
     lines = [
-        "Final Verdict",
+        "YOWON Prime Verdict",
         f"Status: {public.get('status', 'COMPLETE')}",
         f"Overall Score: {public.get('overall_score', 0)}/100",
         f"Verdict: {public.get('verdict', 'REJECT')}",
@@ -321,16 +327,16 @@ def _run_evaluation_background(project_id: str) -> None:
 
         if results.get("rejection_report"):
             agent_output_map = {
-                "chief_evaluation": results.get("chief_evaluation", ""),
+                "yowon_prime": results.get("chief_evaluation", ""),
             }
         else:
             agent_output_map = {
-                "technical": results.get("technical", ""),
-                "security": results.get("security", ""),
-                "presentation": results.get("presentation", ""),
-                "innovation": results.get("innovation", ""),
-                "risk": results.get("risk", ""),
-                "chief_evaluation": results.get("chief_evaluation", ""),
+                "forge": results.get("technical", ""),
+                "sentinel": results.get("security", ""),
+                "showcase": results.get("presentation", ""),
+                "visionary": results.get("innovation", ""),
+                "guardian": results.get("risk", ""),
+                "yowon_prime": results.get("chief_evaluation", ""),
             }
 
         for agent_name, output_text in agent_output_map.items():
@@ -539,7 +545,7 @@ async def get_report(project_id: str, db: Session = Depends(get_db)):
     eval_map = {e.agent_name: {"score": e.score, "findings": e.findings} for e in evaluations}
 
     verdict_data: dict = {}
-    chief_ev = eval_map.get("chief_evaluation")
+    chief_ev = eval_map.get("yowon_prime") or eval_map.get("chief_evaluation")
     if chief_ev and chief_ev.get("findings"):
         from validation.json_utils import extract_json
 
@@ -556,7 +562,9 @@ async def get_report(project_id: str, db: Session = Depends(get_db)):
                 score,
                 public_verdict.get("project_type") or project.project_type,
             )
-    if "chief_evaluation" in eval_map:
+    if "yowon_prime" in eval_map:
+        eval_map["yowon_prime"]["findings"] = _chief_public_findings(public_verdict)
+    elif "chief_evaluation" in eval_map:
         eval_map["chief_evaluation"]["findings"] = _chief_public_findings(public_verdict)
 
     return {

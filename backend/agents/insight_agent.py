@@ -1,4 +1,4 @@
-"""Narrative Agent — generates executive narrative from computed scores."""
+"""Insight agent - generates executive narrative from computed scores."""
 
 from crewai import Agent
 from config import CHIEF_MAX_EXECUTION_TIME
@@ -17,9 +17,9 @@ Output ONLY a single JSON object. No markdown or extra text.
 """
 
 
-def create_narrative_agent(*, use_fallback: bool = False) -> Agent:
+def create_insight_agent(*, use_fallback: bool = False) -> Agent:
     model_name = get_model_name("chief", use_fallback=use_fallback)
-    logger.info("[NARRATIVE] Agent initialized model=%s use_fallback=%s", model_name, use_fallback)
+    logger.info("[INSIGHT] Agent initialized model=%s use_fallback=%s", model_name, use_fallback)
     return Agent(
         role="Narrative Officer",
         goal="Generate executive_summary, top_strengths, top_weaknesses, recommended_fixes, roadmap, deployment_roadmap.",

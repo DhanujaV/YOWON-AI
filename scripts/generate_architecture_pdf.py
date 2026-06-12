@@ -31,7 +31,7 @@ def add_code(text):
     content.append(Spacer(1, 6))
 
 add_heading('Project Sentinel — Architecture & Code Map')
-add_para('This document maps the evaluation pipeline from a GitHub link through extraction, analysis, specialist agents, deterministic scoring, narrative generation, and final report generation. Each step lists the implementing file and a short code snippet.')
+add_para('This document maps the evaluation pipeline from a GitHub link through extraction, analysis, Council agents, deterministic scoring, Insight generation, and final report generation. Each step lists the implementing file and a short code snippet.')
 
 steps = [
     ("1) API: accept GitHub link (FastAPI endpoint)", 'backend/main.py',
@@ -59,16 +59,16 @@ items = [
      "def slice_context_for_agent(ctx, agent):\n    if agent == 'technical': brief_parts.append(_gh_excerpt(ctx, readme_limit=1000))\n    return truncate_text(text, MAX_AGENT_DIGEST_CHARS, label=f'digest:{agent}')"),
     ("Specialist task factories", 'backend/tasks/evaluation_tasks.py',
      "def create_technical_task(agent, brief, digest):\n    return Task(description=f'Brief:\n{brief}\nEvidence:\n{digest}\nReturn JSON: {\"technical_score\": <int 0-100>, ... }')"),
-    ("Specialist agent factory", 'backend/agents/specialist_agents.py',
+    ("Council agent factory", 'backend/agents/council_agents.py',
      "def _agent(...):\n    return Agent(..., llm=get_llm('specialist'), max_iter=1, max_execution_time=600)") ,
     ("Run specialists and parse JSON", 'backend/crew/crew.py',
      "raw = invoke_with_retry(lambda: _execute(), fallback_fn=_execute_fallback)\nreport, parse_source = parse_agent_json(raw, model_cls, FALLBACKS[name])"),
     ("Deterministic scoring in Python", 'backend/scoring/score_engine.py',
      "overall = round(sum(agent_map[k] * WEIGHTS.get(k,0) for k in agent_map))\nif overall >= 85: verdict='APPROVE' ... return {'overall_score': overall, 'verdict': verdict, 'risk_level': risk, 'agent_scores': agent_map}") ,
-    ("Narrative agent (LLM) - narrative-only", 'backend/agents/narrative_agent.py & backend/tasks/evaluation_tasks.py',
+    ("Insight agent (LLM) - narrative-only", 'backend/agents/insight_agent.py & backend/tasks/evaluation_tasks.py',
      "create_narrative_task(agent, numeric_summary, key_findings) -> Task(description='Numeric summary:\n{...}\nKey findings...')"),
     ("Invoke narrative & fallback", 'backend/crew/crew.py',
-     "narrative_raw = _run_agent_llm(agent=narrative_agent, task=narrative_task, ...)\nif not narrative_raw.strip(): narrative_raw = json.dumps({'executive_summary': 'Evaluation completed successfully. Narrative generation unavailable.'})"),
+     "narrative_raw = _run_agent_llm(agent=insight_agent, task=narrative_task, ...)\nif not narrative_raw.strip(): narrative_raw = json.dumps({'executive_summary': 'Evaluation completed successfully. Narrative generation unavailable.'})"),
     ("Report generation (PDF)", 'backend/reports/report_generator.py',
      "path = generate_report(project.name, project.id, results)")
 ]
