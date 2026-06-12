@@ -8,6 +8,7 @@ import { normalizeDisplayList, phaseDeploymentRoadmap } from '../../utils/listNo
 
 interface ExecutiveSummaryProps {
   data: VerdictData
+  showRoadmap?: boolean
 }
 
 function SectionCard({
@@ -89,7 +90,7 @@ function DeploymentRoadmap({
   )
 }
 
-export default function ExecutiveSummary({ data }: ExecutiveSummaryProps) {
+export default function ExecutiveSummary({ data, showRoadmap = true }: ExecutiveSummaryProps) {
   const strengths = normalizeDisplayList(data.top_strengths)
   const weaknesses = normalizeDisplayList(data.top_weaknesses)
   const blocking = normalizeDisplayList(data.blocking_issues)
@@ -153,7 +154,7 @@ export default function ExecutiveSummary({ data }: ExecutiveSummaryProps) {
         />
       </div>
 
-      <DeploymentRoadmap items={roadmap} />
+      {showRoadmap && <DeploymentRoadmap items={roadmap} />}
     </div>
   )
 }
