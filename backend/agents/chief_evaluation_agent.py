@@ -27,7 +27,6 @@ def create_chief_evaluation_agent(*, use_fallback: bool = False) -> Agent:
         llm=get_crewai_llm("chief", use_fallback=use_fallback),
         verbose=False,
         allow_delegation=False,
-        # Single-pass LLM for narrative synthesis; allow longer execution time
         max_iter=3,
         max_execution_time=CHIEF_MAX_EXECUTION_TIME,
     )

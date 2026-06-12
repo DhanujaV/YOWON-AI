@@ -36,7 +36,6 @@ def _agent(
         llm=get_crewai_llm("specialist", use_fallback=use_fallback),
         verbose=False,
         allow_delegation=False,
-        # Enforce single-pass, long-running allowance for specialists
         max_iter=3,
         max_execution_time=600,
     )
