@@ -1,6 +1,6 @@
 """Calibration and rubric benchmarks for deterministic scoring."""
 
-from scoring.rubrics import PROJECT_TYPES, get_rubric
+from scoring.rubrics import PROJECT_TYPES, get_rubric, is_presentation_enabled
 from scoring.score_engine import (
     build_empty_repository_rejection,
     build_evidence_profile,
@@ -454,13 +454,31 @@ def test_university_ai_project_not_penalized_like_startup():
     assert result["agent_scores"]["impact"] >= 55
 
 
-def test_presentation_floor_from_readme_and_docs():
+def test_presentation_disabled_for_non_hackathon_projects():
     with_readme_docs = evidence_with(
         checks={"presentation_material": False, "documentation": True},
         repository_statistics={**FULL_EVIDENCE["repository_statistics"], "documentation_files": 2, "presentation_files": 0},
+        submitted_project_type="University Project",
+        detected_project_type="Hackathon Project",
     )
     result = compute_overall(*reports(20), project_type="University Project", evidence=with_readme_docs)
-    assert result["agent_scores"]["presentation"] >= 35
+    assert is_presentation_enabled("Hackathon Project") is True
+    assert is_presentation_enabled("University Project") is False
+    assert "presentation" not in result["agent_scores"]
+    assert "presentation" not in result["raw_agent_scores"]
+    assert "presentation" not in result["calibrated_agent_scores"]
+    assert "presentation" not in result["scoring_weights"]
+    assert all(item.get("dimension") != "presentation" for item in result["penalties"])
+
+
+def test_hackathon_uses_submitted_type_even_when_detection_disagrees():
+    evidence = evidence_with(
+        submitted_project_type="Hackathon Project",
+        detected_project_type="Research Project",
+    )
+    result = compute_overall(*reports(65), project_type="Hackathon Project", evidence=evidence)
+    assert result["agent_scores"]["presentation"] >= 0
+    assert result["scoring_weights"]["presentation"] == .10
 
 
 def test_ml_model_and_dataset_artifacts_raise_evidence_quality():

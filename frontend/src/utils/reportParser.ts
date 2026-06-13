@@ -20,6 +20,27 @@ const DEFAULT_MISSING_EVIDENCE = [
 
 const DEFAULT_POSITIVE_FACTORS = ['Evidence profile generated']
 
+function isPresentationEnabled(projectType?: string) {
+  return projectType === 'Hackathon Project'
+}
+
+function omitPresentationScores(agentScores: VerdictData['agent_scores']): VerdictData['agent_scores'] {
+  if (!agentScores) return agentScores
+  const {
+    presentation: _presentation,
+    showcase: _showcase,
+    ppt: _ppt,
+    ...rest
+  } = agentScores
+  return rest
+}
+
+function omitPresentationWeights(weights?: Record<string, number>) {
+  if (!weights) return {}
+  const { presentation: _presentation, ...rest } = weights
+  return rest
+}
+
 function extractJson(text: string): VerdictData | null {
   const fenced = text.match(/```json\s*([\s\S]*?)\s*```/)
   if (fenced) {
@@ -114,7 +135,11 @@ export function enrichReport(raw: ReportData): ReportData {
       ? extractJson(chief.findings)
       : null
 
-  const agentScores = parsed?.agent_scores ?? buildAgentScores(parsed, raw.evaluations)
+  const selectedProjectType = parsed?.submitted_project_type ?? raw.project_type ?? parsed?.project_type
+  const presentationEnabled = isPresentationEnabled(selectedProjectType)
+  const agentScores = presentationEnabled
+    ? parsed?.agent_scores ?? buildAgentScores(parsed, raw.evaluations)
+    : omitPresentationScores(parsed?.agent_scores ?? buildAgentScores(parsed, raw.evaluations))
   const parsedRoadmap = normalizeDisplayList(parsed?.roadmap ?? parsed?.deployment_roadmap)
   const fallbackRoadmap = extractBullets(chief?.findings ?? '', ['roadmap', 'deploy', 'phase', 'next step'])
   const roadmap = parsedRoadmap.length ? parsedRoadmap : fallbackRoadmap.length ? fallbackRoadmap : DEFAULT_ROADMAP
@@ -156,7 +181,7 @@ export function enrichReport(raw: ReportData): ReportData {
     detected_project_type: parsed?.detected_project_type,
     detected_project_confidence: parsed?.detected_project_confidence,
     evaluation_standard: parsed?.evaluation_standard,
-    scoring_weights: parsed?.scoring_weights ?? {},
+    scoring_weights: presentationEnabled ? parsed?.scoring_weights ?? {} : omitPresentationWeights(parsed?.scoring_weights),
     score_band: parsed?.score_band,
     confidence: parsed?.confidence ?? 0,
     confidence_explanation: parsed?.confidence_explanation,

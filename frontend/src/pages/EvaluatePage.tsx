@@ -24,6 +24,10 @@ const PIPELINE = [
   { id: 'chief', label: 'YOWON Prime', desc: 'Cross-examining the Council and rendering verdict', icon: Gavel, color: '#7C3AED' },
 ]
 
+function isPresentationEnabled(projectType?: string) {
+  return projectType === 'Hackathon Project'
+}
+
 const SIMULATION_STATS = [
   { label: 'Judge Simulation', value: 'Active', icon: Scale, tone: 'text-cyan-300' },
   { label: 'Project DNA', value: 'Mapping', icon: Fingerprint, tone: 'text-emerald-300' },
@@ -32,6 +36,7 @@ const SIMULATION_STATS = [
 
 function resolveAgentStatus(
   agentId: string,
+  pipeline: typeof PIPELINE,
   agentStates?: Record<string, { status: string }>,
   activeAgent?: string,
   globalStatus?: string,
@@ -42,8 +47,8 @@ function resolveAgentStatus(
   if (state?.status === 'running') return 'running'
   if (globalStatus === 'done') return 'completed'
   const normalizedActive = activeAgent === 'brief' ? 'coordinator' : activeAgent
-  const idx = PIPELINE.findIndex(p => p.id === agentId)
-  const activeIdx = PIPELINE.findIndex(p => p.id === normalizedActive)
+  const idx = pipeline.findIndex(p => p.id === agentId)
+  const activeIdx = pipeline.findIndex(p => p.id === normalizedActive)
   if (activeIdx < 0) return 'waiting'
   if (idx < activeIdx) return 'completed'
   if (idx === activeIdx) return 'running'
@@ -65,12 +70,16 @@ export default function EvaluatePage() {
   const activeAgent = progress.agent === 'brief' ? 'coordinator' : progress.agent
   const elapsed = progress.elapsed_seconds ?? 0
   const completionPct = progress.completion_percent ?? 0
+  const visiblePipeline = useMemo(
+    () => PIPELINE.filter(agent => agent.id !== 'presentation' || isPresentationEnabled(projectType)),
+    [projectType],
+  )
 
   const agentStatuses = useMemo<AgentStatus[]>(() => {
-    return PIPELINE.map(p =>
-      resolveAgentStatus(p.id, progress.agent_states, activeAgent, status),
+    return visiblePipeline.map(p =>
+      resolveAgentStatus(p.id, visiblePipeline, progress.agent_states, activeAgent, status),
     )
-  }, [progress.agent_states, activeAgent, status])
+  }, [progress.agent_states, activeAgent, status, visiblePipeline])
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60)
@@ -176,7 +185,7 @@ export default function EvaluatePage() {
             <h2 className="text-xs font-mono text-yowon-muted uppercase tracking-[0.2em] mb-4 px-1">
               Evaluation Pipeline
             </h2>
-            {PIPELINE.map((agent, i) => (
+            {visiblePipeline.map((agent, i) => (
               <AgentPipelineCard
                 key={agent.id}
                 label={agent.label}
@@ -198,6 +207,7 @@ export default function EvaluatePage() {
                 activeAgent={activeAgent}
                 agentStates={progress.agent_states}
                 statuses={agentStatuses}
+                showPresentation={isPresentationEnabled(projectType)}
               />
             </div>
 

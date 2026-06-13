@@ -88,7 +88,7 @@ class AgentScores(BaseModel):
     security: int
     scalability: int
     innovation: int
-    presentation: int
+    presentation: int | None = None
     impact: int
 
 

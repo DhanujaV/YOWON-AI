@@ -31,6 +31,7 @@ interface AgentNetworkProps {
   activeAgent: string
   agentStates?: Record<string, AgentStateEntry>
   statuses: AgentStatus[]
+  showPresentation?: boolean
 }
 
 function nodeStatus(
@@ -46,18 +47,25 @@ function nodeStatus(
   return statuses?.[index ?? 0] ?? 'waiting'
 }
 
-export default function AgentNetwork({ activeAgent, agentStates, statuses }: AgentNetworkProps) {
+export default function AgentNetwork({ activeAgent, agentStates, statuses, showPresentation = true }: AgentNetworkProps) {
   const radius = 130
   const cx = 160
   const cy = 160
   const nodePos: Record<string, { x: number; y: number }> = {}
+  const nodes = NODES.filter(node => node.id !== 'presentation' || showPresentation).map((node, index, list) => ({
+    ...node,
+    angle: Math.round(index * 360 / list.length),
+  }))
+  const edges = EDGES.filter(([from, to]) => (
+    showPresentation || (from !== 'presentation' && to !== 'presentation')
+  ))
 
-  NODES.forEach(n => {
+  nodes.forEach(n => {
     const rad = ((n.angle - 90) * Math.PI) / 180
     nodePos[n.id] = { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) }
   })
 
-  const activeEdges = EDGES.filter(([from, to]) => {
+  const activeEdges = edges.filter(([from, to]) => {
     const fromState = agentStates?.[from]?.status
     const toState = agentStates?.[to]?.status
     return fromState === 'running' || fromState === 'completed' || toState === 'running'
@@ -109,7 +117,7 @@ export default function AgentNetwork({ activeAgent, agentStates, statuses }: Age
         <span className="text-[9px] font-mono text-cyan-100 font-bold tracking-wider">CORE</span>
       </motion.div>
 
-      {NODES.map((node, i) => {
+      {nodes.map((node, i) => {
         const pos = nodePos[node.id]
         const status = nodeStatus(node.id, agentStates, statuses, i)
         const isActive = activeAgent === node.id || activeAgent === 'brief' && node.id === 'coordinator'

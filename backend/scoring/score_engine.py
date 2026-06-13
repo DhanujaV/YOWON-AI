@@ -5,13 +5,14 @@ from __future__ import annotations
 from statistics import pstdev
 from typing import Any
 
-from scoring.rubrics import get_rubric
+from scoring.rubrics import get_rubric, is_presentation_enabled
 from validation.schemas import (
-    AgentScores, InnovationReport, PresentationReport, RiskReport,
+    InnovationReport, PresentationReport, RiskReport,
     SecurityReport, TechnicalReport,
 )
 
 DIMENSIONS = ("technical", "security", "scalability", "innovation", "presentation", "impact")
+NON_PRESENTATION_DIMENSIONS = ("technical", "security", "scalability", "innovation", "impact")
 GLOBAL_BANDS = (
     (91, "Exceptional"),
     (81, "Excellent"),
@@ -333,8 +334,12 @@ def rubric_like_academic(project_type: str | None) -> bool:
 
 def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, Any] | None = None) -> dict[str, Any]:
     evidence = evidence or build_evidence_profile(ctx)
-    zero_scores = {key: 0 for key in DIMENSIONS}
+    submitted_project_type = evidence.get("submitted_project_type", ctx.get("submitted_project_type", ctx.get("project_type", "")))
+    dimensions = DIMENSIONS if is_presentation_enabled(submitted_project_type) else NON_PRESENTATION_DIMENSIONS
+    zero_scores = {key: 0 for key in dimensions}
     reason = "Repository contains no evaluable content."
+    rubric_type = submitted_project_type if submitted_project_type and submitted_project_type != "Auto Detect" else ctx.get("project_type")
+    rubric = get_rubric(rubric_type)
     return {
         "status": "INSUFFICIENT_EVIDENCE",
         "overall_score": 0,
@@ -346,10 +351,10 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
         "agent_scores": zero_scores,
         "raw_agent_scores": zero_scores,
         "calibrated_agent_scores": zero_scores,
-        "agent_calibration_reasons": {key: [reason] for key in DIMENSIONS},
-        "project_type": get_rubric(ctx.get("project_type"))["project_type"],
-        "evaluation_standard": get_rubric(ctx.get("project_type"))["standard"],
-        "scoring_weights": get_rubric(ctx.get("project_type"))["weights"],
+        "agent_calibration_reasons": {key: [reason] for key in dimensions},
+        "project_type": rubric["project_type"],
+        "evaluation_standard": rubric["standard"],
+        "scoring_weights": rubric["weights"],
         "score_band": "Incomplete",
         "confidence": 0,
         "confidence_explanation": "Confidence is 0 because no meaningful project files were detected.",
@@ -381,7 +386,9 @@ def build_empty_repository_rejection(ctx: dict[str, Any], evidence: dict[str, An
         "top_weaknesses": [reason],
         "executive_summary": "REJECT - INSUFFICIENT PROJECT CONTENT. Evaluation stopped before scoring because no meaningful project files were detected.",
         "final_reason": reason,
-        "recommended_fixes": ["Add source code, documentation, or presentation material before re-running evaluation."],
+        "recommended_fixes": [
+            "Add source code, documentation, or supporting evidence before re-running evaluation."
+        ],
         "roadmap": ["Add meaningful project files", "Re-submit for YOWON AI evaluation"],
         "deployment_roadmap": ["Add meaningful project files", "Re-submit for YOWON AI evaluation"],
         "contradictions": [],
@@ -392,10 +399,13 @@ def calibrate_agent_scores(
     raw_scores: dict[str, int],
     evidence: dict[str, Any],
     project_type: str,
+    *,
+    presentation_enabled: bool = True,
 ) -> tuple[dict[str, int], dict[str, list[str]]]:
     """Calibrate each public specialist score using evidence available to that specialist."""
-    scores = {key: _calibrate_curve(int(raw_scores.get(key, 0))) for key in DIMENSIONS}
-    reasons: dict[str, list[str]] = {key: [] for key in DIMENSIONS}
+    dimensions = DIMENSIONS if presentation_enabled else NON_PRESENTATION_DIMENSIONS
+    scores = {key: _calibrate_curve(int(raw_scores.get(key, 0))) for key in dimensions}
+    reasons: dict[str, list[str]] = {key: [] for key in dimensions}
     checks = evidence.get("checks", {})
     total_penalty = 0
     uncertainty_floor = {
@@ -431,7 +441,7 @@ def calibrate_agent_scores(
     if evidence.get("empty_repository") or (
         not evidence.get("repository_has_content") and evidence.get("data_availability", 0) <= 20
     ):
-        for dimension in DIMENSIONS:
+        for dimension in dimensions:
             scores[dimension] = 0
             reasons[dimension].append("Repository contains no evaluable content.")
         return scores, reasons
@@ -478,7 +488,7 @@ def calibrate_agent_scores(
             uncertainty("security", "Unable to determine security posture from repository evidence.")
     if not checks.get("no_critical_findings"):
         cap("security", 60, "Critical/high security findings prevent high security score")
-    if not checks.get("presentation_material") and not checks.get("documentation"):
+    if presentation_enabled and not checks.get("presentation_material") and not checks.get("documentation"):
         cap("presentation", 35, "Unable to determine presentation quality from repository evidence")
     if project_type != "University Project" and (
         not checks.get("innovation_evidence") or not checks.get("novelty_evidence") or not checks.get("differentiation_evidence")
@@ -510,7 +520,8 @@ def calibrate_agent_scores(
         else:
             reasons["security"].append("Security-practice evidence missing; confidence reduced")
     if not checks.get("documentation"):
-        deduct("presentation", 12, "Documentation evidence missing")
+        if presentation_enabled:
+            deduct("presentation", 12, "Documentation evidence missing")
     if not checks.get("innovation_evidence"):
         reasons["innovation"].append("Innovation evidence missing; confidence reduced")
     if evidence.get("data_availability", 0) < 40:
@@ -528,7 +539,7 @@ def calibrate_agent_scores(
             ("citations", "innovation", 8, "No citation or literature-grounding evidence"),
         )
         for check, dimension, points, reason in research_penalties:
-            if not checks.get(check):
+            if not checks.get(check) and (dimension != "presentation" or presentation_enabled):
                 deduct(dimension, points, reason)
         # Research is judged on evidence quality, not repository size or polished UI.
         if checks.get("experimental_evidence") and checks.get("reproducibility"):
@@ -540,7 +551,8 @@ def calibrate_agent_scores(
         if not checks.get("market_evidence"):
             deduct("impact", 28, "No market or customer validation evidence")
         if not checks.get("business_model"):
-            deduct("presentation", 15, "No business model evidence")
+            if presentation_enabled:
+                deduct("presentation", 15, "No business model evidence")
             deduct("impact", 10, "No business model evidence")
         if not checks.get("competitive_analysis"):
             deduct("innovation", 12, "No competitive analysis evidence")
@@ -553,7 +565,8 @@ def calibrate_agent_scores(
         if not checks.get("tests"):
             deduct("technical", 7, "Corporate reliability evidence missing")
     if project_type == "Open Source Project" and not checks.get("contribution_readiness"):
-        deduct("presentation", 10, "No contribution-readiness evidence")
+        if presentation_enabled:
+            deduct("presentation", 10, "No contribution-readiness evidence")
         deduct("impact", 8, "No community-readiness evidence")
     if project_type == "Open Source Project":
         stats = evidence.get("repository_statistics", {})
@@ -564,6 +577,8 @@ def calibrate_agent_scores(
             and checks.get("architecture")
         ):
             for dimension in ("technical", "scalability", "presentation"):
+                if dimension == "presentation" and not presentation_enabled:
+                    continue
                 scores[dimension] = min(100, scores[dimension] + 5)
             reasons["technical"].append("Open-source rubric: substantial implementation and documentation can score highly")
         if evidence.get("community_impact_score", 0) >= 20:
@@ -585,14 +600,15 @@ def calibrate_agent_scores(
             scores["impact"] = max(scores["impact"], min(70, scores["impact"] + 10))
             reasons["impact"].append("University rubric: practical usefulness counts as impact without adoption metrics")
         if checks.get("documentation"):
-            scores["presentation"] = max(scores["presentation"], 35)
-            reasons["presentation"].append("README/documentation evidence establishes presentation floor")
+            if presentation_enabled:
+                scores["presentation"] = max(scores["presentation"], 35)
+                reasons["presentation"].append("README/documentation evidence establishes presentation floor")
 
-    if checks.get("documentation"):
+    if presentation_enabled and checks.get("documentation"):
         scores["presentation"] = max(scores["presentation"], 20)
-    if checks.get("documentation") and evidence.get("repository_statistics", {}).get("documentation_files", 0) > 1:
+    if presentation_enabled and checks.get("documentation") and evidence.get("repository_statistics", {}).get("documentation_files", 0) > 1:
         scores["presentation"] = max(scores["presentation"], 35)
-    if evidence.get("has_report_document") or evidence.get("repository_statistics", {}).get("presentation_files", 0) > 0:
+    if presentation_enabled and (evidence.get("has_report_document") or evidence.get("repository_statistics", {}).get("presentation_files", 0) > 0):
         scores["presentation"] = max(scores["presentation"], 45)
 
     return scores, reasons
@@ -603,16 +619,23 @@ def compute_overall(
     presentation: PresentationReport, risk: RiskReport, *, project_type: str = "Hackathon Project",
     evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    rubric = get_rubric(project_type)
-    raw_scores = AgentScores(
-        technical=technical.technical_score, security=security.security_score,
-        scalability=innovation.scalability_score, innovation=innovation.innovation_score,
-        presentation=presentation.presentation_score, impact=risk.impact_score,
-    ).model_dump()
-    raw_scores = {k: max(0, min(100, int(v))) for k, v in raw_scores.items()}
     evidence = evidence or {"checks": {}, "data_availability": 0, "repository_coverage": 0, "json_validity": 0}
+    submitted_project_type = evidence.get("submitted_project_type", project_type)
+    rubric_type = submitted_project_type if submitted_project_type and submitted_project_type != "Auto Detect" else project_type
+    rubric = get_rubric(rubric_type)
+    presentation_enabled = is_presentation_enabled(submitted_project_type)
+    raw_scores = {
+        "technical": technical.technical_score,
+        "security": security.security_score,
+        "scalability": innovation.scalability_score,
+        "innovation": innovation.innovation_score,
+        "impact": risk.impact_score,
+    }
+    if presentation_enabled:
+        raw_scores["presentation"] = presentation.presentation_score
+    raw_scores = {k: max(0, min(100, int(v))) for k, v in raw_scores.items()}
     calibrated_scores, calibration_reasons = calibrate_agent_scores(
-        raw_scores, evidence, rubric["project_type"]
+        raw_scores, evidence, rubric["project_type"], presentation_enabled=presentation_enabled
     )
     scoring_inputs = {
         **calibrated_scores,
@@ -889,7 +912,6 @@ def _infer_risk_level(security: SecurityReport, calibrated_security: int, overal
 def detect_contradictions(technical, security, innovation, presentation, risk, brief_missing):
     out = []
     if technical.technical_score > 80 and security.security_score < 50: out.append("High technical score conflicts with low security score")
-    if presentation.presentation_score > 80 and brief_missing: out.append("High presentation score despite missing materials")
     if innovation.innovation_score > 85 and innovation.confidence < .5: out.append("High innovation score with low confidence")
     if risk.impact_score > 75 and len(risk.top_risks) >= 4: out.append("Strong impact score despite multiple material risks")
     return out

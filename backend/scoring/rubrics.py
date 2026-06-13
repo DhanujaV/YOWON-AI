@@ -11,33 +11,38 @@ PROJECT_TYPES = (
 )
 PROJECT_TYPE_ALIASES = {}
 
+
+def is_presentation_enabled(project_type: str | None) -> bool:
+    """Presentation scoring is enabled only for the user's selected hackathon type."""
+    return str(project_type or "").strip() == "Hackathon Project"
+
 RUBRICS: dict[str, dict[str, Any]] = {
     "University Project": {
         "standard": "Academic quality, learning outcomes, correctness, and clear communication",
-        "focus": ["technical correctness", "academic rigor", "innovation", "presentation"],
+        "focus": ["technical correctness", "academic rigor", "innovation", "risk"],
         "avoid_expectations": ["Kubernetes", "CI/CD", "enterprise security", "large-scale deployment"],
-        "weights": {"technical": .30, "presentation": .25, "innovation": .20, "risk": .15, "security": .10},
+        "weights": {"technical": .35, "innovation": .25, "risk": .20, "security": .20},
         "bands": {90: "Exceptional academic project", 80: "Excellent", 70: "Good", 60: "Average", 0: "Needs improvement"},
     },
     "Hackathon Project": {
         "standard": "Prototype quality, innovation, demo readiness, and execution under time constraints",
         "focus": ["innovation", "prototype quality", "demo readiness"],
         "avoid_expectations": ["production-scale operations", "complete compliance program"],
-        "weights": {"innovation": .35, "technical": .25, "presentation": .20, "risk": .10, "security": .10},
+        "weights": {"technical": .30, "innovation": .25, "security": .15, "risk": .20, "presentation": .10},
         "bands": {90: "Exceptional hackathon project", 80: "Strong finalist", 70: "Competitive prototype", 60: "Promising prototype", 0: "Needs improvement"},
     },
     "Startup Pitch": {
         "standard": "Market viability, business model, differentiation, evidence, and execution risk",
         "focus": ["market viability", "business model", "product differentiation", "execution risk"],
         "avoid_expectations": ["enterprise operations before product-market evidence"],
-        "weights": {"innovation": .25, "technical": .20, "presentation": .15, "risk": .20, "business_feasibility": .20},
+        "weights": {"innovation": .30, "technical": .25, "risk": .25, "business_feasibility": .20},
         "bands": {90: "Exceptional investment-ready pitch", 80: "Strong opportunity", 70: "Promising with validation gaps", 60: "Early concept", 0: "Needs major validation"},
     },
     "Startup Product": {
         "standard": "Product viability, implementation depth, user value, differentiation, and execution risk",
         "focus": ["working product", "customer value", "technical execution", "go-to-market readiness"],
         "avoid_expectations": ["enterprise compliance before scale evidence"],
-        "weights": {"technical": .25, "innovation": .20, "presentation": .15, "risk": .20, "business_feasibility": .20},
+        "weights": {"technical": .30, "innovation": .25, "risk": .25, "business_feasibility": .20},
         "bands": {90: "Exceptional product-ready startup", 80: "Strong product", 70: "Promising with validation gaps", 60: "Early product", 0: "Needs major validation"},
     },
     "Research Project": {
@@ -47,28 +52,28 @@ RUBRICS: dict[str, dict[str, Any]] = {
             "reproducibility", "baseline benchmarking", "publication potential",
         ],
         "avoid_expectations": ["commercial deployment unless claimed", "large code volume", "UI polish"],
-        "weights": {"innovation": .35, "technical": .25, "impact": .25, "presentation": .10, "security": .03, "scalability": .02},
+        "weights": {"innovation": .40, "technical": .30, "impact": .25, "security": .05},
         "bands": {90: "Publication-grade contribution", 80: "Strong research project", 70: "Sound with revision needed", 60: "Preliminary study", 0: "Methodology needs improvement"},
     },
     "Corporate Project": {
         "standard": "Production readiness, security, scalability, compliance, reliability, and maintainability",
         "focus": ["security", "scalability", "compliance", "reliability", "maintainability"],
         "avoid_expectations": [],
-        "weights": {"technical": .30, "security": .30, "risk": .20, "innovation": .05, "presentation": .15},
+        "weights": {"technical": .35, "security": .35, "risk": .20, "innovation": .10},
         "bands": {90: "Production-ready", 80: "Strong", 70: "Needs improvements", 0: "Not deployment ready"},
     },
     "Enterprise System": {
         "standard": "Enterprise-grade reliability, security, scalability, compliance, integration, and maintainability",
         "focus": ["security", "scalability", "compliance", "integrations", "operational reliability"],
         "avoid_expectations": [],
-        "weights": {"technical": .28, "security": .30, "risk": .18, "scalability": .14, "presentation": .10},
+        "weights": {"technical": .32, "security": .32, "risk": .20, "scalability": .16},
         "bands": {90: "Enterprise-ready", 80: "Strong enterprise candidate", 70: "Needs hardening", 0: "Not enterprise-ready"},
     },
     "Open Source Project": {
         "standard": "Documentation, community readiness, code quality, maintainability, and contributor experience",
         "focus": ["documentation", "community readiness", "code quality", "maintainability"],
         "avoid_expectations": ["enterprise compliance unless claimed"],
-        "weights": {"technical": .30, "presentation": .20, "innovation": .15, "security": .15, "impact": .10, "scalability": .10},
+        "weights": {"technical": .35, "innovation": .20, "security": .20, "impact": .15, "scalability": .10},
         "bands": {90: "Exceptional community-ready project", 80: "Strong open source project", 70: "Useful with maintenance gaps", 60: "Early-stage project", 0: "Needs improvement"},
     },
 }

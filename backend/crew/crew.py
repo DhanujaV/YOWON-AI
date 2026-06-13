@@ -44,6 +44,7 @@ from scoring.score_engine import (
     detect_contradictions,
     format_cross_exam,
 )
+from scoring.rubrics import is_presentation_enabled
 from tasks.evaluation_tasks import (
     create_chief_evaluation_task,
     create_narrative_task,
@@ -407,6 +408,8 @@ def run_evaluation(
 ) -> dict[str, Any]:
     eval_start = time.perf_counter()
     failures: dict[str, str] = {}
+    submitted_project_type = ctx.get("submitted_project_type", ctx.get("project_type", ""))
+    presentation_enabled = is_presentation_enabled(submitted_project_type)
 
     agent_start(project_id, "coordinator", message="[COORDINATOR] Building evaluation brief")
     brief_start = time.perf_counter()
@@ -431,14 +434,12 @@ def run_evaluation(
             message="[SCORE] Rejected: Repository contains no evaluable content.",
         )
         rejection_json = json.dumps(verdict_dict, indent=2)
-        return {
+        rejection_result = {
             "brief": brief_text,
             "technical": "",
             "security": "",
             "innovation": "",
-            "presentation": "",
             "risk": "",
-            "ppt": "",
             "impact": rejection_json,
             "failure": "Repository contains no evaluable content.",
             "scalability": "",
@@ -457,14 +458,19 @@ def run_evaluation(
             "risk_impact": "",
             "coordination": brief_text,
         }
+        if presentation_enabled:
+            rejection_result["presentation"] = ""
+            rejection_result["ppt"] = ""
+        return rejection_result
 
     jobs = [
         ("technical", create_technical_agent, create_technical_task, TechnicalReport),
         ("security", create_security_agent, create_security_task, SecurityReport),
-        ("presentation", create_presentation_agent, create_presentation_task, PresentationReport),
         ("innovation", create_innovation_agent, create_innovation_task, InnovationReport),
         ("risk", create_risk_agent, create_risk_task, RiskReport),
     ]
+    if presentation_enabled:
+        jobs.insert(2, ("presentation", create_presentation_agent, create_presentation_task, PresentationReport))
 
     reports: dict[str, Any] = {}
     raw_outputs: dict[str, str] = {}
@@ -512,7 +518,10 @@ def run_evaluation(
     technical: TechnicalReport = reports["technical"]
     security: SecurityReport = reports["security"]
     innovation: InnovationReport = reports["innovation"]
-    presentation: PresentationReport = reports["presentation"]
+    presentation: PresentationReport = reports.get(
+        "presentation",
+        PresentationReport(presentation_score=0, strengths=[], improvements=[], confidence=0, status="DISABLED"),
+    )
     risk: RiskReport = reports["risk"]
 
     scoring_start = time.perf_counter()
@@ -543,7 +552,7 @@ def run_evaluation(
             "technical": technical.model_dump(),
             "security": security.model_dump(),
             "innovation": innovation.model_dump(),
-            "presentation": presentation.model_dump(),
+            **({"presentation": presentation.model_dump()} if presentation_enabled else {}),
             "risk": risk.model_dump(),
             "failures": failures,
             "contradictions": contradictions,
@@ -622,7 +631,7 @@ def run_evaluation(
         time.perf_counter() - narrative_start,
         narrative_parse_source,
     )
-    verdict_dict = verdict.model_dump()
+    verdict_dict = verdict.model_dump(exclude_none=True)
     narrative_duration = round(time.perf_counter() - narrative_start, 2)
 
     if narrative_parse_source != "llm":
@@ -654,14 +663,12 @@ def run_evaluation(
     calibrated_score_map = computed["calibrated_agent_scores"]
     calibration_reasons = computed["agent_calibration_reasons"]
 
-    return {
+    result = {
         "brief": brief_text,
         "technical": _format_report_text("technical", technical, raw_outputs["technical"], raw_score_map, calibrated_score_map, calibration_reasons),
         "security": _format_report_text("security", security, raw_outputs["security"], raw_score_map, calibrated_score_map, calibration_reasons),
         "innovation": _format_report_text("innovation", innovation, raw_outputs["innovation"], raw_score_map, calibrated_score_map, calibration_reasons),
-        "presentation": _format_report_text("presentation", presentation, raw_outputs["presentation"], raw_score_map, calibrated_score_map, calibration_reasons),
         "risk": _format_report_text("risk", risk, raw_outputs["risk"], raw_score_map, calibrated_score_map, calibration_reasons),
-        "ppt": _format_report_text("presentation", presentation, raw_outputs["presentation"], raw_score_map, calibrated_score_map, calibration_reasons),
         "impact": _professional_section("Guardian Analysis", [
             ("Impact Score", f"{calibrated_score_map['impact']}/100"),
             ("Top Risks", risk.top_risks),
@@ -687,6 +694,18 @@ def run_evaluation(
         "risk_impact": raw_outputs["risk"],
         "coordination": brief_text,
     }
+    if presentation_enabled:
+        presentation_text = _format_report_text(
+            "presentation",
+            presentation,
+            raw_outputs["presentation"],
+            raw_score_map,
+            calibrated_score_map,
+            calibration_reasons,
+        )
+        result["presentation"] = presentation_text
+        result["ppt"] = presentation_text
+    return result
 
 
 def _build_executive_summary(

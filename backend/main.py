@@ -37,7 +37,7 @@ from tools.parser import build_project_context, context_to_text
 from tools.vector_store import store_project_context
 from crew.crew import run_evaluation
 from reports.report_generator import PDFGenerationError, generate_report, validate_pdf_file
-from scoring.rubrics import PROJECT_TYPES, normalize_project_type
+from scoring.rubrics import PROJECT_TYPES, is_presentation_enabled, normalize_project_type
 from utils.ranking_engine import build_ranking_payload, save_evaluation
 from progress import (
     PHASE_BUILD_CONTEXT,
@@ -204,13 +204,11 @@ async def upload_project(
 def _agent_score_map(verdict: dict) -> dict[str, float]:
     scores = verdict.get("agent_scores") or {}
     overall = verdict.get("overall_score", 0)
-    return {
+    score_map = {
         "forge": float(scores.get("technical", 0)),
         "technical": float(scores.get("technical", 0)),
         "sentinel": float(scores.get("security", 0)),
         "security": float(scores.get("security", 0)),
-        "showcase": float(scores.get("presentation", 0)),
-        "presentation": float(scores.get("presentation", 0)),
         "visionary": float(scores.get("innovation", 0)),
         "innovation": float(scores.get("innovation", 0)),
         "guardian": float(scores.get("impact", 0)),
@@ -218,6 +216,10 @@ def _agent_score_map(verdict: dict) -> dict[str, float]:
         "yowon_prime": float(overall),
         "chief_evaluation": float(overall),
     }
+    if is_presentation_enabled(verdict.get("submitted_project_type") or verdict.get("project_type")) and "presentation" in scores:
+        score_map["showcase"] = float(scores.get("presentation", 0))
+        score_map["presentation"] = float(scores.get("presentation", 0))
+    return score_map
 
 
 INTERNAL_VERDICT_FIELDS = {
@@ -233,7 +235,25 @@ def _public_verdict_data(verdict: dict) -> dict:
     """Strip backend-only scoring diagnostics from user-facing responses."""
     if not isinstance(verdict, dict):
         return {}
-    return {k: v for k, v in verdict.items() if k not in INTERNAL_VERDICT_FIELDS}
+    public = {k: v for k, v in verdict.items() if k not in INTERNAL_VERDICT_FIELDS}
+    if not is_presentation_enabled(public.get("submitted_project_type") or public.get("project_type")):
+        for score_key in ("agent_scores",):
+            scores = public.get(score_key)
+            if isinstance(scores, dict):
+                public[score_key] = {
+                    key: value for key, value in scores.items()
+                    if key not in {"presentation", "showcase", "ppt"}
+                }
+        weights = public.get("scoring_weights")
+        if isinstance(weights, dict):
+            public["scoring_weights"] = {
+                key: value for key, value in weights.items() if key != "presentation"
+            }
+        public["penalties"] = [
+            item for item in (public.get("penalties") or [])
+            if not (isinstance(item, dict) and item.get("dimension") == "presentation")
+        ]
+    return public
 
 
 def _chief_public_findings(verdict: dict) -> str:
@@ -333,11 +353,12 @@ def _run_evaluation_background(project_id: str) -> None:
             agent_output_map = {
                 "forge": results.get("technical", ""),
                 "sentinel": results.get("security", ""),
-                "showcase": results.get("presentation", ""),
                 "visionary": results.get("innovation", ""),
                 "guardian": results.get("risk", ""),
                 "yowon_prime": results.get("chief_evaluation", ""),
             }
+            if is_presentation_enabled(verdict.get("submitted_project_type") or project.project_type):
+                agent_output_map["showcase"] = results.get("presentation", "")
 
         for agent_name, output_text in agent_output_map.items():
             db.add(

@@ -82,6 +82,10 @@ function rankText(rank?: string) {
   return rank && rank !== 'Insufficient Data' ? rank : 'Insufficient Data'
 }
 
+function isPresentationEnabled(projectType?: string) {
+  return projectType === 'Hackathon Project'
+}
+
 function ProjectDNA({ data }: { data: { subject: string; score: number }[] }) {
   const items = data.length ? data.slice(0, 6) : [
     { subject: 'Evidence', score: 30 },
@@ -497,6 +501,10 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
   const riskLevel = vd?.risk_level ?? 'MEDIUM'
   const ranking = vd?.ranking
   const selectedProjectType = vd?.submitted_project_type ?? report.project_type ?? vd?.project_type
+  const showPresentation = isPresentationEnabled(selectedProjectType)
+  const reportEvaluations = Object.entries(report.evaluations).filter(([key]) => (
+    showPresentation || !['showcase', 'presentation', 'ppt'].includes(key)
+  ))
   const detectedConfidence = Math.round((vd?.detected_project_confidence ?? 0) * 100)
   const heatmapCategories = radarData.map(d => ({ label: d.subject, score: d.score }))
   const barData = radarData.map(d => ({ name: d.subject, score: d.score }))
@@ -913,7 +921,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                     </div>
                   )}
                   <div className="space-y-3">
-                    {Object.entries(report.evaluations).map(([key, ev]) => (
+                    {reportEvaluations.map(([key, ev]) => (
                       <AgentCard
                         key={key}
                         agentKey={key}

@@ -46,5 +46,23 @@
     "project_type": "Hackathon Project",
     "overall_score": 50,
     "timestamp": "2026-06-12T17:40:13.703318+00:00"
+  },
+  {
+    "project_name": "human vs machine voice",
+    "project_type": "Hackathon Project",
+    "overall_score": 50,
+    "timestamp": "2026-06-12T18:45:00.189827+00:00"
+  },
+  {
+    "project_name": "Sign language detettion",
+    "project_type": "Hackathon Project",
+    "overall_score": 43,
+    "timestamp": "2026-06-13T03:58:27.802364+00:00"
+  },
+  {
+    "project_name": "Sign language detection",
+    "project_type": "Hackathon Project",
+    "overall_score": 43,
+    "timestamp": "2026-06-13T04:10:54.441468+00:00"
   }
 ]
