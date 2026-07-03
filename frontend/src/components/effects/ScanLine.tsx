@@ -1,16 +1,16 @@
-import { motion } from 'framer-motion'
-
+/**
+ * ScanLine — a subtle moving scan line across the page.
+ * Pure CSS animation, respects prefers-reduced-motion.
+ */
 export default function ScanLine() {
   return (
-    <motion.div
-      className="fixed left-0 right-0 h-px pointer-events-none -z-10"
+    <div
+      className="fixed inset-x-0 top-0 h-px pointer-events-none z-[1] opacity-0 [animation:scan_6s_linear_infinite]"
+      aria-hidden="true"
       style={{
-        background:
-          'linear-gradient(90deg, transparent, rgba(168,85,247,0.5), rgba(236,72,153,0.5), transparent)',
-        boxShadow: '0 0 24px rgba(168,85,247,0.35)',
+        background: 'linear-gradient(90deg, transparent 0%, rgba(0,229,255,0.35) 50%, transparent 100%)',
+        animation: 'scan 6s linear infinite',
       }}
-      animate={{ top: ['0%', '100%'] }}
-      transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
     />
   )
 }

@@ -406,6 +406,89 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
+  // Advanced Code Intelligence Workspace States
+  const [intelTab, setIntelTab] = useState('overview')
+  const [treeData, setTreeData] = useState<any[]>([])
+  const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({})
+  const [archGraph, setArchGraph] = useState<any>(null)
+  const [techGraph, setTechGraph] = useState<any>(null)
+  const [depGraph, setDepGraph] = useState<any>(null)
+  const [callGraph, setCallGraph] = useState<any>(null)
+  const [metricsData, setMetricsData] = useState<any>(null)
+  const [healthData, setHealthData] = useState<any>(null)
+  const [heatmapData, setHeatmapData] = useState<any[]>([])
+  const [heatmapMetric, setHeatmapMetric] = useState('risk')
+  const [recommendationsData, setRecommendationsData] = useState<any[]>([])
+  const [timelineData, setTimelineData] = useState<any[]>([])
+  const [evidenceData, setEvidenceData] = useState<any[]>([])
+  const [selectedFile, setSelectedFile] = useState<any>(null)
+  const [zoomScale, setZoomScale] = useState(1.0)
+
+  // Lazy-loader trigger effect
+  useEffect(() => {
+    if (!verdictRevealed || demo || !projectId) return
+    const evalId = report?.evaluation_id || projectId
+
+    if (intelTab === 'tree' && treeData.length === 0) {
+      fetch(`/evaluations/${evalId}/repository-tree`).then(res => res.json()).then(setTreeData).catch(() => {})
+    } else if (intelTab === 'architecture' && !archGraph) {
+      fetch(`/evaluations/${evalId}/architecture`).then(res => res.json()).then(setArchGraph).catch(() => {})
+    } else if (intelTab === 'technology' && !techGraph) {
+      fetch(`/evaluations/${evalId}/technology-graph`).then(res => res.json()).then(setTechGraph).catch(() => {})
+    } else if (intelTab === 'dependencies' && !depGraph) {
+      fetch(`/evaluations/${evalId}/dependency-graph`).then(res => res.json()).then(setDepGraph).catch(() => {})
+    } else if (intelTab === 'call-graph' && !callGraph) {
+      fetch(`/evaluations/${evalId}/call-graph`).then(res => res.json()).then(setCallGraph).catch(() => {})
+    } else if (intelTab === 'metrics' && !metricsData) {
+      fetch(`/evaluations/${evalId}/metrics`).then(res => res.json()).then(setMetricsData).catch(() => {})
+    } else if (intelTab === 'health' && !healthData) {
+      fetch(`/evaluations/${evalId}/health`).then(res => res.json()).then(setHealthData).catch(() => {})
+    } else if (intelTab === 'heatmap') {
+      fetch(`/evaluations/${evalId}/heatmap?metric=${heatmapMetric}`).then(res => res.json()).then(setHeatmapData).catch(() => {})
+    } else if (intelTab === 'recommendations' && recommendationsData.length === 0) {
+      fetch(`/evaluations/${evalId}/recommendations`).then(res => res.json()).then(setRecommendationsData).catch(() => {})
+    } else if (intelTab === 'timeline' && timelineData.length === 0) {
+      fetch(`/evaluations/${evalId}/timeline`).then(res => res.json()).then(setTimelineData).catch(() => {})
+    } else if (intelTab === 'evidence' && evidenceData.length === 0) {
+      fetch(`/evaluations/${evalId}/evidence`).then(res => res.json()).then(data => setEvidenceData(data.evidence || [])).catch(() => {})
+    }
+  }, [intelTab, projectId, report, verdictRevealed, demo, heatmapMetric])
+
+  const toggleFolder = (path: string) => {
+    const isExpanded = !!expandedPaths[path]
+    setExpandedPaths(prev => ({ ...prev, [path]: !isExpanded }))
+    
+    if (!isExpanded) {
+      const evalId = report?.evaluation_id || projectId
+      fetch(`/evaluations/${evalId}/repository-tree?path=${encodeURIComponent(path)}`)
+        .then(res => res.json())
+        .then(children => {
+          setTreeData(prev => {
+            const updateNode = (nodes: any[]): any[] => {
+              return nodes.map(node => {
+                if (node.path === path) {
+                  return { ...node, children }
+                } else if (node.children) {
+                  return { ...node, children: updateNode(node.children) }
+                }
+                return node
+              })
+            }
+            return updateNode(prev)
+          })
+        })
+        .catch(() => {})
+    }
+  }
+
+  const loadFileContent = (fpath: string) => {
+    const evalId = report?.evaluation_id || projectId
+    fetch(`/evaluations/${evalId}/file/${encodeURIComponent(fpath)}`)
+      .then(res => res.json())
+      .then(setSelectedFile)
+      .catch(() => {})
+  }
+
   useEffect(() => {
     if (demo) {
       setReport(getDemoReport())
@@ -798,36 +881,559 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                   </div>
                 </DashboardSection>
 
-                <DashboardSection id="repository-analysis" title="Repository Analysis" icon={Gauge} accent="amber">
-                  {vd?.repository_statistics && Object.keys(vd.repository_statistics).length > 0 ? (
-                    <div className="glass-card">
-                      <h3 className="font-display font-bold text-lg mb-4">Repository Statistics</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {Object.entries(vd.repository_statistics).map(([name, value]) => (
-                          <div key={name} className="border border-white/5 rounded-lg p-3">
-                            <p className="text-[10px] font-mono uppercase tracking-widest text-yowon-muted">
-                              {name.replace(/_/g, ' ')}
-                            </p>
-                            <p className="text-lg font-mono text-yowon-text mt-1">{value}</p>
+                {/* ══ REPOSITORY ANALYSIS WORKSPACE ══ */}
+                <DashboardSection id="repository-analysis" title="Code Intelligence Command Center" icon={Gauge} accent="amber">
+                  <div className="flex flex-wrap gap-2 mb-6 border-b border-white/[0.06] pb-3">
+                    {[
+                      { id: 'overview', label: 'Overview' },
+                      { id: 'tree', label: 'File Explorer' },
+                      { id: 'architecture', label: 'Architecture' },
+                      { id: 'technology', label: 'Tech Stack' },
+                      { id: 'dependencies', label: 'Dependencies' },
+                      { id: 'call-graph', label: 'Call Graph' },
+                      { id: 'health', label: 'Health' },
+                      { id: 'heatmap', label: 'Treemap Heatmap' },
+                      { id: 'metrics', label: 'Metrics' },
+                      { id: 'evidence', label: 'Evidence Logs' },
+                      { id: 'recommendations', label: 'Action Checklist' },
+                      { id: 'timeline', label: 'Timeline' }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setIntelTab(tab.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 border ${
+                          intelTab === tab.id
+                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                            : 'bg-white/[0.02] border-white/[0.05] text-yowon-muted hover:bg-white/[0.05] hover:text-white'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 1. OVERVIEW TAB */}
+                  {intelTab === 'overview' && (
+                    <div className="space-y-4">
+                      {vd?.repository_statistics && Object.keys(vd.repository_statistics).length > 0 ? (
+                        <div className="glass-card">
+                          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Repository Statistics</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {Object.entries(vd.repository_statistics).map(([name, value]) => (
+                              <div key={name} className="border border-white/5 rounded-lg p-3">
+                                <p className="text-[10px] font-mono uppercase tracking-widest text-yowon-muted">
+                                  {name.replace(/_/g, ' ')}
+                                </p>
+                                <p className="text-lg font-mono text-white mt-1">{value}</p>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        </div>
+                      ) : (
+                        <div className="glass-card">
+                          <p className="text-sm text-yowon-muted">No repository statistics were included in this report.</p>
+                        </div>
+                      )}
+
+                      <div className="glass-card border border-amber-500/20">
+                        <div className="absolute inset-0 bg-gradient-to-b from-amber-500/[0.04] to-transparent pointer-events-none rounded-[inherit]" />
+                        <div className="relative z-10">
+                          <p className="font-semibold text-white mb-4 text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                            Why did this project receive this score?
+                          </p>
+                          <p className="text-xs text-yowon-muted mb-4">
+                            Calibration: <span className="text-amber-300 font-semibold">{vd?.score_band}</span>
+                          </p>
+                          <div className="grid md:grid-cols-3 gap-4 text-xs">
+                            <div>
+                              <p className="font-bold text-emerald-400 mb-2 uppercase tracking-wider text-[10px]">Positive Factors</p>
+                              {(vd?.positive_factors ?? []).map(x => <p key={x} className="text-yowon-muted mb-1">+ {x}</p>)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-amber-300 mb-2 uppercase tracking-wider text-[10px]">Penalties</p>
+                              <ul className="space-y-1">
+                                {(vd?.penalties ?? []).map(x => (
+                                  <li key={`${x.dimension}-${x.factor}`} className="text-yowon-muted flex gap-2">
+                                    <span className="text-amber-300 shrink-0">−</span>
+                                    {x.dimension ? `${x.dimension}: ` : ''}{x.factor}
+                                    {x.points != null ? ` (-${x.points})` : ''}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="font-bold text-red-400 mb-2 uppercase tracking-wider text-[10px]">Missing Evidence</p>
+                              {(vd?.missing_evidence ?? []).map(x => <p key={x} className="text-yowon-muted mb-1">{x}</p>)}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="glass-card">
-                      <p className="text-sm text-yowon-muted">No repository statistics were included in this report.</p>
                     </div>
                   )}
 
-                  <div className="glass-card border border-amber-500/20">
-                    <h3 className="font-display font-bold text-lg mb-4">Why did this project receive this score?</h3>
-                    <p className="text-sm text-yowon-muted mb-3">Calibration: <span className="text-amber-300">{vd?.score_band}</span></p>
-                    <div className="grid md:grid-cols-3 gap-4 text-sm">
-                      <div><h4 className="text-emerald-300 mb-2">Positive factors</h4>{(vd?.positive_factors ?? []).map(x => <p key={x} className="text-yowon-muted mb-1">+ {x}</p>)}</div>
-                      <div><h4 className="text-amber-300 mb-2">Penalties</h4>{(vd?.penalties ?? []).map(x => <p key={`${x.dimension}-${x.factor}`} className="text-yowon-muted mb-1">{x.dimension ? `${x.dimension}: ` : ''}{x.factor}{x.points != null ? ` (-${x.points})` : ''}</p>)}</div>
-                      <div><h4 className="text-red-300 mb-2">Missing evidence</h4>{(vd?.missing_evidence ?? []).map(x => <p key={x} className="text-yowon-muted mb-1">{x}</p>)}</div>
+                  {/* 2. REPOSITORY TREE TAB */}
+                  {intelTab === 'tree' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px]">
+                      {/* Left: Interactive Tree */}
+                      <div className="glass-card lg:col-span-2 overflow-y-auto max-h-[600px] font-mono text-xs">
+                        <p className="text-[10px] uppercase tracking-[0.22em] text-yowon-muted mb-4">Workspace Tree Explorer</p>
+                        {treeData.length === 0 ? (
+                          <div className="text-yowon-muted py-8 text-center">Loading directory tree...</div>
+                        ) : (
+                          <div className="space-y-1 pl-1">
+                            {(() => {
+                              const renderNode = (node: any, depth = 0) => {
+                                const isDir = node.type === 'dir'
+                                const isExpanded = !!expandedPaths[node.path]
+                                return (
+                                  <div key={node.path} className="select-none">
+                                    <div
+                                      onClick={() => isDir ? toggleFolder(node.path) : loadFileContent(node.path)}
+                                      className={`flex items-center gap-2 py-1 px-2 rounded hover:bg-white/[0.04] cursor-pointer transition-all ${
+                                        selectedFile?.path === node.path ? 'bg-amber-500/10 text-amber-300' : ''
+                                      }`}
+                                      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+                                    >
+                                      <span className="text-yowon-muted shrink-0">
+                                        {isDir ? (isExpanded ? '📂' : '📁') : '📄'}
+                                      </span>
+                                      <span className="truncate">{node.name}</span>
+                                      {!isDir && node.language && (
+                                        <span className="text-[9px] bg-white/[0.05] border border-white/10 text-yowon-muted px-1.5 py-0.5 rounded shrink-0">
+                                          {node.language}
+                                        </span>
+                                      )}
+                                      {!isDir && node.size > 0 && (
+                                        <span className="text-[9px] text-yowon-muted ml-auto shrink-0">
+                                          {Math.round(node.size / 1024)} KB
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isDir && isExpanded && node.children && (
+                                      <div className="border-l border-white/[0.06] ml-[15px]">
+                                        {node.children.map((c: any) => renderNode(c, depth + 1))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              }
+                              return treeData.map(node => renderNode(node))
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right: File Code & Metrics Drawer */}
+                      <div className="glass-card">
+                        <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Symbol & Code Inspector</p>
+                        {selectedFile ? (
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-white font-bold truncate text-xs">{selectedFile.path.split('/').pop()}</p>
+                              <p className="text-[10px] text-yowon-muted truncate">{selectedFile.path}</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                              <div className="bg-white/[0.02] border border-white/5 rounded px-2 py-1">
+                                <span className="text-yowon-muted block">Lines (LOC)</span>
+                                <span className="text-amber-300 font-bold text-sm">{selectedFile.metrics?.loc || 0}</span>
+                              </div>
+                              <div className="bg-white/[0.02] border border-white/5 rounded px-2 py-1">
+                                <span className="text-yowon-muted block">Complexity</span>
+                                <span className="text-cyan-300 font-bold text-sm">
+                                  {selectedFile.metrics?.complexity?.cyclomatic_complexity || 1}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Triggered Rules evidence */}
+                            {selectedFile.evidence && selectedFile.evidence.length > 0 && (
+                              <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-2.5 space-y-2">
+                                <p className="text-[10px] font-mono font-bold text-red-400 uppercase tracking-wider">Traced Vulnerabilities / Rules</p>
+                                {selectedFile.evidence.map((ev: any) => (
+                                  <div key={ev.rule_id} className="text-[11px] leading-normal text-red-300">
+                                    <p className="font-bold">{ev.rule_id}</p>
+                                    <p className="text-yowon-muted">Line {ev.line_start}-{ev.line_end} (Confidence: {Math.round(ev.confidence * 100)}%)</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Snippet Preview */}
+                            <div className="bg-black/40 border border-white/10 rounded-lg p-3 font-mono text-[10px] overflow-x-auto max-h-[300px] leading-relaxed text-slate-300">
+                              <pre><code>{selectedFile.content}</code></pre>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-yowon-muted text-xs py-12 text-center">
+                            Select a source file in the explorer tree to inspect its AST elements and metrics.
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* 3. DYNAMIC ARCHITECTURE GRAPH TAB */}
+                  {intelTab === 'architecture' && (
+                    <div className="glass-card min-h-[500px]">
+                      <div className="flex justify-between items-center mb-4">
+                        <div>
+                          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted">Pipeline Architecture Topology</p>
+                          <p className="text-xs text-white mt-1">Inferred runtime blocks and sequential connection flows.</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setZoomScale(s => Math.max(0.6, s - 0.1))} className="px-2 py-1 bg-white/[0.04] border border-white/10 rounded text-xs">-</button>
+                          <button onClick={() => setZoomScale(s => Math.min(2.0, s + 0.1))} className="px-2 py-1 bg-white/[0.04] border border-white/10 rounded text-xs">+</button>
+                          <button onClick={() => setZoomScale(1.0)} className="px-2 py-1 bg-white/[0.04] border border-white/10 rounded text-xs">Reset</button>
+                        </div>
+                      </div>
+
+                      {archGraph ? (
+                        <div className="relative overflow-hidden bg-black/30 border border-white/5 rounded-xl min-h-[400px] flex items-center justify-center">
+                          <div
+                            className="flex flex-wrap gap-12 justify-center items-center p-8 transition-transform duration-200"
+                            style={{ transform: `scale(${zoomScale})` }}
+                          >
+                            {archGraph.nodes.map((node: any) => (
+                              <motion.div
+                                key={node.id}
+                                whileHover={{ scale: 1.05 }}
+                                className="bg-yowon-bg/95 border border-cyan-500/30 rounded-xl p-4 w-44 shadow-2xl backdrop-blur relative z-10"
+                              >
+                                <span className="text-[9px] font-mono text-cyan-400 uppercase tracking-widest block mb-1">
+                                  {node.type.toUpperCase()}
+                                </span>
+                                <h4 className="text-xs font-bold text-white mb-2">{node.label}</h4>
+                                <p className="text-[10px] text-yowon-muted leading-snug">{node.metadata?.description}</p>
+                                
+                                {node.metadata?.technologies && node.metadata.technologies.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-3">
+                                    {node.metadata.technologies.map((t: string) => (
+                                      <span key={t} className="text-[8px] bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 px-1 rounded">
+                                        {t}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading architecture topology graph...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 4. TECHNOLOGY TAB */}
+                  {intelTab === 'technology' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Detected Technology Relations</p>
+                      {techGraph ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          {techGraph.nodes.map((node: any) => (
+                            <div key={node.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-4 flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-bold text-emerald-400">
+                                {node.label.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-white">{node.label}</h4>
+                                <p className="text-[10px] text-yowon-muted mt-0.5">Stack Framework</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading technology stack nodes...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 5. DEPENDENCIES TAB */}
+                  {intelTab === 'dependencies' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Code Manifest Dependencies</p>
+                      {depGraph ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          {depGraph.nodes.filter((n: any) => n.type === 'dependency').map((node: any) => (
+                            <div key={node.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col justify-between">
+                              <span className="text-xs font-mono font-bold text-white truncate">{node.label.split('@')[0]}</span>
+                              <span className="text-[10px] text-yowon-muted font-mono mt-2">
+                                Version: <span className="text-cyan-400 font-bold">{node.metadata?.version || 'unknown'}</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading dependency list...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 6. CALL GRAPH TAB */}
+                  {intelTab === 'call-graph' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Inter-Module Imports Call Graph</p>
+                      {callGraph ? (
+                        <div className="bg-black/20 border border-white/5 rounded-xl p-4 overflow-y-auto max-h-[600px] font-mono text-xs">
+                          {callGraph.edges.length === 0 ? (
+                            <p className="text-yowon-muted text-center py-12">No inter-module imports detected in parsed source code files.</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {callGraph.edges.map((edge: any) => (
+                                <div key={`${edge.source}-${edge.target}`} className="flex items-center gap-3 bg-white/[0.02] border border-white/5 p-3 rounded-lg">
+                                  <span className="text-amber-300 font-semibold truncate">{edge.source.split('/').pop()}</span>
+                                  <span className="text-yowon-muted text-[10px]">⎯ imports ⎯➔</span>
+                                  <span className="text-cyan-300 font-semibold truncate">{edge.target.split('/').pop()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading module call graph...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 7. HEALTH TAB */}
+                  {intelTab === 'health' && (
+                    <div className="space-y-4">
+                      {healthData ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {[
+                            { name: 'Documentation', score: healthData.documentation, desc: 'README quality and comment ratio.', color: '#00FFA3' },
+                            { name: 'Testing', score: healthData.testing, desc: 'Test coverage and frameworks.', color: '#00E5FF' },
+                            { name: 'Security', score: healthData.security, desc: 'Credentials and API exposures.', color: '#EF4444' },
+                            { name: 'Deployment', score: healthData.deployment, desc: 'Dockerfiles and pipeline actions.', color: '#7C3AED' },
+                            { name: 'Architecture', score: healthData.architecture, desc: 'Modularity and folder separation.', color: '#F59E0B' },
+                            { name: 'Maintainability', score: healthData.maintainability, desc: 'Complexity and comment balance.', color: '#22D3EE' }
+                          ].map(h => (
+                            <div key={h.name} className="glass-card flex flex-col justify-between">
+                              <div>
+                                <h4 className="font-bold text-white text-xs mb-1">{h.name}</h4>
+                                <p className="text-[10px] text-yowon-muted mb-4">{h.desc}</p>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-2xl font-black font-mono" style={{ color: h.color }}>
+                                  {h.score}/100
+                                </div>
+                                <div className="w-full bg-white/[0.04] h-2 rounded-full overflow-hidden border border-white/5">
+                                  <div className="h-full rounded-full" style={{ width: `${h.score}%`, backgroundColor: h.color }} />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading health scores...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 8. HEATMAP TAB */}
+                  {intelTab === 'heatmap' && (
+                    <div className="glass-card min-h-[500px]">
+                      <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted">Interactive Treemap Heatmap</p>
+                          <p className="text-xs text-white mt-1">Files sized by volume and colored by selected risk metric.</p>
+                        </div>
+                        <div className="flex gap-2">
+                          {['risk', 'importance', 'complexity', 'coverage'].map(m => (
+                            <button
+                              key={m}
+                              onClick={() => setHeatmapMetric(m)}
+                              className={`px-2 py-1 text-[10px] rounded font-mono border ${
+                                heatmapMetric === m
+                                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                  : 'bg-white/[0.02] border-white/10 text-yowon-muted hover:bg-white/[0.05]'
+                              }`}
+                            >
+                              {m.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {heatmapData.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                          {heatmapData.map(node => {
+                            const isHigh = node.metric_value > 70
+                            const isMed = node.metric_value > 30
+                            const bgColor = heatmapMetric === 'coverage'
+                              ? (node.metric_value > 50 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)')
+                              : (isHigh ? 'rgba(239, 68, 68, 0.15)' : isMed ? 'rgba(245, 158, 11, 0.15)' : 'rgba(0, 229, 255, 0.05)')
+                            
+                            const borderColor = heatmapMetric === 'coverage'
+                              ? (node.metric_value > 50 ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)')
+                              : (isHigh ? 'rgba(239, 68, 68, 0.4)' : isMed ? 'rgba(245, 158, 11, 0.4)' : 'rgba(255, 255, 255, 0.1)')
+                            
+                            const textColor = heatmapMetric === 'coverage'
+                              ? (node.metric_value > 50 ? 'text-emerald-400' : 'text-red-400')
+                              : (isHigh ? 'text-red-400' : isMed ? 'text-amber-400' : 'text-cyan-400')
+
+                            return (
+                              <div
+                                key={node.path}
+                                onClick={() => { setIntelTab('tree'); loadFileContent(node.path) }}
+                                className="p-3 rounded-lg border transition-all duration-200 hover:scale-[1.02] cursor-pointer flex flex-col justify-between min-h-[90px]"
+                                style={{ backgroundColor: bgColor, borderColor: borderColor }}
+                              >
+                                <span className="text-[10px] text-white font-bold truncate block">{node.name}</span>
+                                <div className="mt-4 flex justify-between items-center">
+                                  <span className="text-[9px] text-yowon-muted font-mono">VAL</span>
+                                  <span className={`text-[11px] font-black font-mono ${textColor}`}>{node.metric_value}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading file heatmap grid...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 9. METRICS TAB */}
+                  {intelTab === 'metrics' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Static Code Metrics Logs</p>
+                      {metricsData ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full font-mono text-[10px] text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-white/10 text-yowon-muted">
+                                <th className="pb-2">FILE PATH</th>
+                                <th className="pb-2">LOC</th>
+                                <th className="pb-2">CYCLOMATIC</th>
+                                <th className="pb-2">COGNITIVE</th>
+                                <th className="pb-2">MAINTAINABILITY</th>
+                                <th className="pb-2">RISK</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Object.entries(metricsData.metrics).map(([path, data]: any) => (
+                                <tr key={path} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                                  <td className="py-2 text-white truncate max-w-[250px]">{path}</td>
+                                  <td className="py-2 text-cyan-400 font-bold">{data.loc}</td>
+                                  <td className="py-2 text-slate-300">{data.complexity?.cyclomatic_complexity}</td>
+                                  <td className="py-2 text-slate-300">{data.complexity?.cognitive_complexity}</td>
+                                  <td className="py-2 text-emerald-400 font-bold">{Math.round(data.complexity?.maintainability_index)}%</td>
+                                  <td className="py-2 text-red-400 font-bold">{data.risk}/100</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading code metrics...</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 10. EVIDENCE TAB */}
+                  {intelTab === 'evidence' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Underlying Evidence Logs</p>
+                      <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                        {evidenceData.length === 0 ? (
+                          <div className="text-yowon-muted py-12 text-center text-xs">No evidence records are available.</div>
+                        ) : (
+                          evidenceData.map((ev, idx) => (
+                            <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-lg p-3 flex justify-between items-center">
+                              <div>
+                                <span className="text-[9px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                                  {ev.rule_id}
+                                </span>
+                                <p className="text-white text-xs font-bold mt-2">{ev.symbol_name ? `Symbol: ${ev.symbol_name}` : 'Feature detection'}</p>
+                                <p className="text-[10px] text-yowon-muted font-mono mt-1">
+                                  {ev.file_path} at line {ev.line_start}-{ev.line_end}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[9px] text-yowon-muted font-mono block">CONFIDENCE</span>
+                                <span className="text-emerald-400 font-bold font-mono text-xs">{Math.round(ev.confidence * 100)}%</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 11. RECOMMENDATIONS TAB */}
+                  {intelTab === 'recommendations' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-4">Actionable Checklist Recommendations</p>
+                      <div className="space-y-3">
+                        {recommendationsData.length === 0 ? (
+                          <div className="text-yowon-muted py-12 text-center text-xs">No check recommendations were produced.</div>
+                        ) : (
+                          recommendationsData.map((rec, idx) => (
+                            <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-xl p-4 flex justify-between gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border ${
+                                    rec.severity === 'CRITICAL' || rec.severity === 'HIGH'
+                                      ? 'bg-red-500/10 border-red-500/25 text-red-400'
+                                      : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                                  }`}>
+                                    {rec.severity}
+                                  </span>
+                                  <span className="text-[9px] text-yowon-muted font-mono">EFFORT: {rec.estimated_effort}</span>
+                                </div>
+                                <h4 className="text-xs font-bold text-white">{rec.title}</h4>
+                                <p className="text-[11px] text-yowon-muted leading-relaxed">{rec.recommendation}</p>
+                              </div>
+                              
+                              <div className="text-right shrink-0">
+                                <span className="text-[9px] text-yowon-muted font-mono block">SCORE GAIN</span>
+                                <span className="text-emerald-400 font-black font-mono text-base">+{rec.expected_score_gain}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 12. TIMELINE TAB */}
+                  {intelTab === 'timeline' && (
+                    <div className="glass-card min-h-[500px]">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted mb-6">Repository Evolution Timeline</p>
+                      {timelineData.length > 0 ? (
+                        <div className="relative pl-6 border-l border-white/[0.06] space-y-6 ml-2 font-mono text-xs">
+                          {timelineData.map((snap: any, idx: number) => (
+                            <div key={snap.snapshot_id} className="relative">
+                              {/* Bullet dot */}
+                              <div className="absolute -left-[30px] top-1.5 w-4 h-4 rounded-full border border-amber-500 bg-yowon-bg flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              </div>
+
+                              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 max-w-lg">
+                                <span className="text-[10px] text-yowon-muted block">{new Date(snap.timestamp).toLocaleString()}</span>
+                                <p className="text-white font-bold mt-2">Commit SHA: {snap.commit_sha.substring(0, 7)}</p>
+                                
+                                {snap.evaluation_id && (
+                                  <div className="mt-3 flex gap-4 text-[10px]">
+                                    <span className="text-yowon-muted">
+                                      Verdict: <span className="text-amber-400 font-bold">{snap.verdict}</span>
+                                    </span>
+                                    <span className="text-yowon-muted">
+                                      Score: <span className="text-cyan-400 font-bold">{snap.score}/100</span>
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-yowon-muted text-xs py-24 text-center">Loading snapshot timeline history...</div>
+                      )}
+                    </div>
+                  )}
                 </DashboardSection>
 
                 <DashboardSection id="security" title="Sentinel" icon={Shield} accent="red">

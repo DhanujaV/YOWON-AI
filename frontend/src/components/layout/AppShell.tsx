@@ -7,7 +7,6 @@ interface AppShellProps {
   children: ReactNode
   showHeader?: boolean
   particles?: boolean
-  scan?: boolean
 }
 
 export default function AppShell({

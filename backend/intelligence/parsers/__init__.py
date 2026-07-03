@@ -1,0 +1,6 @@
+from intelligence.parsers.base_parser import BaseParser
+from intelligence.parsers.parser_registry import ParserRegistry
+from intelligence.parsers.python_parser import PythonParser
+from intelligence.parsers.javascript_parser import JavaScriptParser
+from intelligence.parsers.typescript_parser import TypeScriptParser
+from intelligence.parsers.unknown_parser import UnknownParser

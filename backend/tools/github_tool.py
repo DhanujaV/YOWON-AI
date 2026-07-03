@@ -268,18 +268,22 @@ def _build_repository_statistics(file_paths: list[str]) -> RepositoryMetrics:
 def extract_github_data(github_url: str) -> dict[str, Any]:
     """
     Main entry point.  Returns a structured dict with all extracted info.
-
-    Keys:
-      name, description, url, stars, forks, language, topics,
-      readme, folder_structure, dependencies, python_files
     """
+    from utils.git_provider import GitHubProvider
+    provider = GitHubProvider()
+
     repo_name = _repo_name_from_url(github_url)
     cached = _load_cached_repo(repo_name)
-    if cached:
+    if cached and "commit_sha" in cached:
         return cached
 
-    gh = _github_client()
+    try:
+        details = provider.get_repo_details(github_url)
+        commit_details = provider.get_latest_commit(github_url)
+    except Exception as exc:
+        return {"error": f"Git provider error: {str(exc)}"}
 
+    gh = _github_client()
     try:
         repo = gh.get_repo(repo_name)
     except GithubException as exc:
@@ -303,6 +307,16 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
         "analyzed_source_files": [],
         "top_code_snippets": [],
         "cache": {"hit": False},
+        "github_repository_id": details.get("github_repository_id"),
+        "owner": details.get("owner"),
+        "repository_name": details.get("repository_name"),
+        "default_branch": details.get("default_branch"),
+        "visibility": details.get("visibility"),
+        "license": details.get("license"),
+        "commit_sha": commit_details.get("commit_sha"),
+        "tree_sha": commit_details.get("tree_sha"),
+        "branch": commit_details.get("branch"),
+        "last_commit_timestamp": commit_details.get("last_commit_timestamp").isoformat() if commit_details.get("last_commit_timestamp") else None,
     }
 
     # ── README ──────────────────────────────────────────────────────────────

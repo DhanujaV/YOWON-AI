@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FileText, Presentation, Upload, X, CheckCircle2 } from 'lucide-react'
+import { Upload, X, FileText, Presentation, CheckCircle2 } from 'lucide-react'
 
 interface FileDropZoneProps {
   accept: string
@@ -11,160 +11,94 @@ interface FileDropZoneProps {
   onFile: (file: File | null) => void
 }
 
-export default function FileDropZone({
-  accept,
-  label,
-  hint,
-  type,
-  file,
-  onFile,
-}: FileDropZoneProps) {
+export default function FileDropZone({ accept, label, hint, type, file, onFile }: FileDropZoneProps) {
   const [dragging, setDragging] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const Icon = type === 'pdf' ? FileText : Presentation
-  const maxBytes = 50 * 1024 * 1024
-  const allowedExtensions = type === 'pdf' ? ['.pdf'] : ['.ppt', '.pptx']
-  const executableExtensions = ['.exe', '.bat', '.cmd', '.com', '.scr', '.ps1', '.sh', '.js', '.jar', '.msi']
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const validateFile = (f: File): string | null => {
-    const lowerName = f.name.toLowerCase()
-    const parts = lowerName.split('.').filter(Boolean)
-    const finalExt = parts.length > 1 ? `.${parts[parts.length - 1]}` : ''
-    if (!allowedExtensions.includes(finalExt)) return `${label} must be ${allowedExtensions.join(' or ')}`
-    const earlierExts = parts.slice(1, -1).map(part => `.${part}`)
-    if (earlierExts.some(ext => executableExtensions.includes(ext))) return 'Executable or double-extension files are not allowed'
-    if (earlierExts.length && earlierExts.some(ext => !allowedExtensions.includes(ext))) return 'Double-extension files are not allowed'
-    if (f.size > maxBytes) return `${label} must be 50MB or smaller`
-    if (f.type && type === 'pdf' && !['application/pdf', 'application/x-pdf'].includes(f.type)) return 'Invalid PDF file type'
-    if (f.type && type === 'ppt' && ![
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'application/octet-stream',
-    ].includes(f.type)) return 'Invalid PowerPoint file type'
-    return null
-  }
+  const Icon    = type === 'pdf' ? FileText : Presentation
+  const color   = type === 'pdf' ? '#EF4444' : '#7C3AED'
+  const bgColor = type === 'pdf' ? 'rgba(239,68,68,0.08)' : 'rgba(124,58,237,0.08)'
 
-  const handleFile = useCallback(
-    (f: File | null) => {
-      if (!f) {
-        onFile(null)
-        setUploadProgress(0)
-        setError(null)
-        return
-      }
-      const validationError = validateFile(f)
-      if (validationError) {
-        onFile(null)
-        setUploadProgress(0)
-        setError(validationError)
-        return
-      }
-      setError(null)
-      setUploadProgress(0)
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(interval)
-            onFile(f)
-            return 100
-          }
-          return prev + 12
-        })
-      }, 60)
-    },
-    [onFile],
-  )
-
-  const onDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
     const dropped = e.dataTransfer.files[0]
-    if (dropped) handleFile(dropped)
-  }
+    if (dropped) onFile(dropped)
+  }, [onFile])
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0]
+    if (picked) onFile(picked)
+  }, [onFile])
 
   return (
-    <div>
-      <label className="block text-sm font-medium text-yowon-muted mb-2 font-display">
-        {label}
-      </label>
-      <motion.div
-        className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-300 overflow-hidden ${
-          dragging
-            ? 'border-violet-400/50 bg-violet-500/5 scale-[1.01]'
-            : file
-              ? 'border-emerald-500/40 bg-emerald-500/5'
-              : 'border-yowon-border hover:border-pink-500/35'
-        }`}
-        onDragOver={e => {
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => {
-          const input = document.createElement('input')
-          input.type = 'file'
-          input.accept = accept
-          input.onchange = () => handleFile(input.files?.[0] ?? null)
-          input.click()
-        }}
-        whileTap={{ scale: 0.99 }}
-      >
+    <div
+      className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden ${
+        dragging
+          ? 'border-cyan-300/60 bg-cyan-300/[0.06]'
+          : file
+            ? 'border-emerald-500/40 bg-emerald-500/[0.06]'
+            : 'border-white/[0.10] hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.04]'
+      }`}
+      onClick={() => inputRef.current?.click()}
+      onDragOver={e => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
+      aria-label={`Upload ${label}`}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="sr-only"
+        onChange={handleChange}
+        tabIndex={-1}
+      />
+
+      <div className="p-5 text-center">
         <AnimatePresence mode="wait">
           {file ? (
             <motion.div
               key="file"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="flex items-center justify-between gap-3"
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <CheckCircle2 size={22} className="text-emerald-400 flex-shrink-0" />
-                <div className="text-left min-w-0">
-                  <p className="text-sm font-medium text-emerald-400 truncate">{file.name}</p>
-                  <p className="text-xs text-yowon-muted">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-              </div>
+              <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-400" />
+              <p className="text-xs font-semibold text-emerald-400 truncate px-2">{file.name}</p>
+              <p className="text-[10px] text-yowon-muted mt-1">
+                {(file.size / 1024 / 1024).toFixed(2)} MB
+              </p>
               <button
                 type="button"
-                onClick={e => {
-                  e.stopPropagation()
-                  handleFile(null)
-                }}
-                className="p-1.5 rounded-lg hover:bg-white/5 text-yowon-muted hover:text-red-400 transition-colors"
+                onClick={e => { e.stopPropagation(); onFile(null) }}
+                className="mt-3 flex items-center gap-1 mx-auto text-[10px] text-red-400/70 hover:text-red-400 transition"
               >
-                <X size={16} />
+                <X size={11} /> Remove
               </button>
             </motion.div>
           ) : (
-            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Icon
-                size={28}
-                className={`mx-auto mb-3 ${dragging ? 'text-violet-400' : 'text-yowon-muted'}`}
-              />
-              <p className="text-sm text-yowon-muted">
-                <Upload size={14} className="inline mr-1.5 -mt-0.5" />
-                Drag & drop or click to upload
-              </p>
-              <p className="text-xs text-yowon-muted/70 mt-1">{hint}</p>
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 border"
+                style={{ background: bgColor, borderColor: `${color}30` }}>
+                <Icon size={22} style={{ color }} />
+              </div>
+              <p className="text-sm font-semibold text-white mb-1">{label}</p>
+              <p className="text-[11px] text-yowon-muted mb-2">{hint}</p>
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-yowon-muted">
+                <Upload size={11} />
+                <span>Drop here or click to browse</span>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {uploadProgress > 0 && uploadProgress < 100 && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-yowon-border">
-            <motion.div
-              className="h-full bg-gradient-to-r from-violet-500 via-pink-500 to-amber-400"
-              style={{ width: `${uploadProgress}%` }}
-            />
-          </div>
-        )}
-      </motion.div>
-      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+      </div>
     </div>
   )
 }

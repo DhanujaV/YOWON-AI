@@ -119,30 +119,19 @@ export interface VerdictData {
 
 
 export interface ReportData {
-
   project_id: string
-
   project_name: string
   project_type?: ProjectType | string
-
   status: ProjectStatus
-
   evaluation_status?: string
-
   report_status?: ReportStatus
-
   report_error?: string | null
-
   overall_score: number | null
-
   verdict: VerdictType | string | null
-
   report_id: string | null
-
+  evaluation_id?: string
   evaluations: Record<string, Evaluation>
-
   verdict_data?: VerdictData
-
 }
 
 

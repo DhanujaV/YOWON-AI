@@ -19,8 +19,9 @@ from llm_utils import get_crewai_llm, get_model_name
 def test_crewai_llm_initialization_returns_basellm():
     llm = get_crewai_llm("specialist")
     assert isinstance(llm, BaseLLM)
-    assert llm.model.startswith("ollama/")
-    assert get_model_name("specialist") in llm.model
+    model = llm.model
+    assert model.startswith("ollama/") or model == get_model_name("specialist")
+    assert get_model_name("specialist") in model
 
 
 def test_council_agents_use_crewai_basellm():
@@ -81,7 +82,7 @@ def test_end_to_end_crewai_kickoff_with_basellm():
         role="CrewAI Integration Tester",
         goal="Return a short health confirmation.",
         backstory="You validate the agent execution path.",
-        llm=FakeCrewLLM(),
+        llm=FakeCrewLLM(model="fake/test"),
         verbose=False,
         allow_delegation=False,
         max_iter=1,

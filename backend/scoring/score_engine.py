@@ -620,7 +620,7 @@ def compute_overall(
     evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     evidence = evidence or {"checks": {}, "data_availability": 0, "repository_coverage": 0, "json_validity": 0}
-    submitted_project_type = evidence.get("submitted_project_type", project_type)
+    submitted_project_type = evidence.get("submitted_project_type") or project_type
     rubric_type = submitted_project_type if submitted_project_type and submitted_project_type != "Auto Detect" else project_type
     rubric = get_rubric(rubric_type)
     presentation_enabled = is_presentation_enabled(submitted_project_type)

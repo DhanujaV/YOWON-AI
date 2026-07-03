@@ -96,7 +96,6 @@ def get_crewai_llm(role: str = "specialist", *, use_fallback: bool = False) -> L
         temperature=cfg.get("temperature"),
         max_tokens=max_tokens,
         timeout=AGENT_MAX_EXECUTION_TIME if role != "chief" else CHIEF_MAX_EXECUTION_TIME,
-        num_ctx=cfg.get("num_ctx"),
     )
 
 

@@ -628,7 +628,7 @@ class YowonReport:
         self._add_cover(verdict_data)
         self.story.append(Paragraph("Executive Summary", self.h1))
         self._add_section("Overview", verdict_data.get("executive_summary") or "YOWON AI completed the project intelligence evaluation.", C_PRIMARY)
-        self._add_key_value_table("Evaluation Context", [
+        context_rows = [
             ("Selected Project Type", verdict_data.get("submitted_project_type") or verdict_data.get("project_type", "Hackathon Project")),
             ("AI Detected Type", (
                 f"{verdict_data.get('detected_project_type')} "
@@ -641,7 +641,12 @@ class YowonReport:
             ("Confidence", f"{verdict_data.get('confidence', 0)}/100"),
             ("Evidence Quality", verdict_data.get("evidence_quality", "Unknown")),
             ("Repository Completeness", f"{verdict_data.get('repository_completeness_score', 0)}/100"),
-        ])
+        ]
+        if "status" in verdict_data:
+            context_rows.append(("Evaluation Status", str(verdict_data["status"])))
+        if "final_reason" in verdict_data:
+            context_rows.append(("Rejection Reason", str(verdict_data["final_reason"])))
+        self._add_key_value_table("Evaluation Context", context_rows)
         if verdict_data.get("repository_statistics"):
             self._add_key_value_table(
                 "Repository Statistics",
