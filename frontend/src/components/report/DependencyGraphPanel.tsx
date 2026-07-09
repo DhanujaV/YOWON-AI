@@ -61,6 +61,7 @@ function DependencyGraphContent({ projectId, onSelectNode }: { projectId: string
   const [simNodes, setSimNodes] = useState<Node[]>([])
   const [simEdges, setSimEdges] = useState<Edge[]>([])
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
 
   const graph = useMemo(() => {
     const data = depGraph?.success ? depGraph.data : depGraph
@@ -167,9 +168,9 @@ function DependencyGraphContent({ projectId, onSelectNode }: { projectId: string
           const distSqr = dx * dx + dy * dy || 1
           const dist = Math.sqrt(distSqr)
           
-          const minD = na.type === 'project' || nb.type === 'project' ? 120 : (na.type === 'ecosystem' || nb.type === 'ecosystem' ? 85 : 55)
+          const minD = na.type === 'project' || nb.type === 'project' ? 180 : (na.type === 'ecosystem' || nb.type === 'ecosystem' ? 140 : 110)
           if (dist < minD) {
-            const force = (minD - dist) * 0.15
+            const force = (minD - dist) * 0.35
             const fx = (dx / dist) * force
             const fy = (dy / dist) * force
             if (na.id !== draggedNodeId && !pinnedNodes.has(na.id)) { na.x! -= fx; na.y! -= fy }
@@ -188,7 +189,7 @@ function DependencyGraphContent({ projectId, onSelectNode }: { projectId: string
         const dy = target.y! - source.y!
         const dist = Math.sqrt(dx * dx + dy * dy) || 1
         
-        const targetLen = edge.label === 'uses' ? 95 : 140
+        const targetLen = edge.label === 'uses' ? 150 : 200
         const k = 0.04
         const force = (dist - targetLen) * k
         const fx = (dx / dist) * force
@@ -205,8 +206,8 @@ function DependencyGraphContent({ projectId, onSelectNode }: { projectId: string
 
       currentNodes.forEach(n => {
         if (n.id === draggedNodeId || pinnedNodes.has(n.id)) return
-        n.x! += (targetX - n.x!) * 0.015
-        n.y! += (targetY - n.y!) * 0.015
+        n.x! += (targetX - n.x!) * 0.005
+        n.y! += (targetY - n.y!) * 0.005
       })
 
       setSimNodes([...currentNodes])
@@ -403,6 +404,8 @@ function DependencyGraphContent({ projectId, onSelectNode }: { projectId: string
                         }}
                         onDoubleClick={() => togglePin(node.id)}
                         onMouseDown={() => setDraggedNodeId(node.id)}
+                        onMouseEnter={() => setHoveredNodeId(node.id)}
+                        onMouseLeave={() => setHoveredNodeId(null)}
                         style={{ cursor: 'pointer' }}
                       >
                         <circle
@@ -415,16 +418,18 @@ function DependencyGraphContent({ projectId, onSelectNode }: { projectId: string
                         {isPinned && (
                           <circle r={2} fill="#000" />
                         )}
-                        <text
-                          y={radius + 12}
-                          textAnchor="middle"
-                          fill={isSelected ? '#22d3ee' : '#94a3b8'}
-                          fontSize="9px"
-                          fontFamily="monospace"
-                          className="pointer-events-none select-none"
-                        >
-                          {node.label}
-                        </text>
+                        {(node.type === 'project' || node.type === 'ecosystem' || isSelected || hoveredNodeId === node.id || simNodes.length < 25 || zoom > 1.4) && (
+                          <text
+                            y={radius + 12}
+                            textAnchor="middle"
+                            fill={isSelected ? '#22d3ee' : (hoveredNodeId === node.id ? '#fff' : '#94a3b8')}
+                            fontSize="9px"
+                            fontFamily="monospace"
+                            className="pointer-events-none select-none"
+                          >
+                            {node.label}
+                          </text>
+                        )}
                       </g>
                     )
                   })}

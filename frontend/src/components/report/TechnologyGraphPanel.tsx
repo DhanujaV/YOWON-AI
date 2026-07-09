@@ -69,6 +69,7 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
   const [simEdges, setSimEdges] = useState<Edge[]>([])
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
   const [ticksCount, setTicksCount] = useState(0)
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
 
   const graph = useMemo(() => {
     const data = techGraph?.success ? techGraph.data : techGraph
@@ -112,7 +113,7 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
     return { nodes: resultNodes, edges: resultEdges }
   }, [graph, searchTerm, activeCategoryFilter, isolateMode, selectedNode])
 
-  // Initialize and Reset Layout
+  // Initialize and Reset Layout (only on main graph change)
   const resetLayout = () => {
     setTicksCount(0)
     setZoom(1.0)
@@ -120,11 +121,11 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
     setSelectedNode(null)
     setIsolateMode(false)
     
-    if (filteredGraph.nodes.length === 0) return
+    if (graph.nodes.length === 0) return
     const centerX = 360
     const centerY = 240
 
-    const initialNodes = filteredGraph.nodes.map(n => {
+    const initialNodes = graph.nodes.map((n: any) => {
       const angle = Math.random() * 2 * Math.PI
       const r = 100 + Math.random() * 100
       return {
@@ -138,10 +139,41 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
     setSimNodes(initialNodes)
   }
 
+  // Call full reset only when base graph data loads
   useEffect(() => {
-    if (filteredGraph.nodes.length > 0) {
+    if (graph.nodes && graph.nodes.length > 0) {
       resetLayout()
     }
+  }, [graph])
+
+  // Sync filtered nodes into simulation without resetting zoom/pan or selection
+  useEffect(() => {
+    if (filteredGraph.nodes.length === 0) {
+      setSimNodes([])
+      return
+    }
+    const centerX = 360
+    const centerY = 240
+    
+    const existingPos = new Map(simNodes.map(n => [n.id, { x: n.x, y: n.y }]))
+    
+    const initialNodes = filteredGraph.nodes.map(n => {
+      const pos = existingPos.get(n.id)
+      if (pos && pos.x !== undefined && pos.y !== undefined) {
+        return { ...n, x: pos.x, y: pos.y, vx: 0, vy: 0 }
+      }
+      const angle = Math.random() * 2 * Math.PI
+      const r = 100 + Math.random() * 100
+      return {
+        ...n,
+        x: centerX + r * Math.cos(angle),
+        y: centerY + r * Math.sin(angle),
+        vx: 0,
+        vy: 0
+      }
+    })
+    setSimNodes(initialNodes)
+    setTicksCount(0)
   }, [filteredGraph])
 
   // D3 force simulation loop
@@ -163,8 +195,8 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
           const distSqr = dx * dx + dy * dy || 1
           const dist = Math.sqrt(distSqr)
           
-          if (dist < 90) {
-            const force = (90 - dist) * 0.12
+          if (dist < 130) {
+            const force = (130 - dist) * 0.3
             const fx = (dx / dist) * force
             const fy = (dy / dist) * force
             if (na.id !== draggedNodeId) { na.x! -= fx; na.y! -= fy }
@@ -183,7 +215,7 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
         const dy = target.y! - source.y!
         const dist = Math.sqrt(dx * dx + dy * dy) || 1
         
-        const force = (dist - 120) * 0.04
+        const force = (dist - 180) * 0.04
         const fx = (dx / dist) * force
         const fy = (dy / dist) * force
 
@@ -194,8 +226,8 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
       // Gravity
       currentNodes.forEach(n => {
         if (n.id === draggedNodeId) return
-        n.x! += (centerX - n.x!) * 0.015
-        n.y! += (centerY - n.y!) * 0.015
+        n.x! += (centerX - n.x!) * 0.005
+        n.y! += (centerY - n.y!) * 0.005
       })
 
       setSimNodes([...currentNodes])
@@ -421,6 +453,8 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
                           e.stopPropagation()
                           setDraggedNodeId(node.id)
                         }}
+                        onMouseEnter={() => setHoveredNodeId(node.id)}
+                        onMouseLeave={() => setHoveredNodeId(null)}
                         style={{ cursor: 'pointer' }}
                       >
                         <circle
@@ -434,17 +468,19 @@ function TechnologyGraphContent({ projectId, onSelectNode }: { projectId: string
                           r={4}
                           fill={color}
                         />
-                        <text
-                          y={radius + 13}
-                          textAnchor="middle"
-                          fill={isSelected ? '#fff' : '#e4e4e7'}
-                          fontSize="9px"
-                          fontWeight="bold"
-                          fontFamily="monospace"
-                          className="pointer-events-none select-none"
-                        >
-                          {node.label}
-                        </text>
+                        {(isSelected || hoveredNodeId === node.id || simNodes.length < 20 || zoom > 1.4) && (
+                          <text
+                            y={radius + 13}
+                            textAnchor="middle"
+                            fill={isSelected ? '#fff' : '#e4e4e7'}
+                            fontSize="9px"
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                            className="pointer-events-none select-none"
+                          >
+                            {node.label}
+                          </text>
+                        )}
                       </g>
                     )
                   })}

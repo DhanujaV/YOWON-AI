@@ -287,6 +287,31 @@ async def upload_project(
         )
         raise
 
+    # Deduplicate project by name or github_url
+    existing_project = None
+    if safe_github_url:
+        existing_project = db.query(Project).filter(Project.github_url == safe_github_url).first()
+    else:
+        existing_project = db.query(Project).filter(Project.name == safe_name).first()
+
+    if existing_project:
+        logger.info(f"Reusing existing project_id={existing_project.id} for project '{safe_name}'")
+        if pdf_path:
+            existing_project.pdf_path = pdf_path
+        if ppt_path:
+            existing_project.ppt_path = ppt_path
+        existing_project.status = "pending"
+        db.commit()
+        return JSONResponse(
+            status_code=201,
+            content={
+                "project_id": existing_project.id,
+                "project_type": existing_project.project_type,
+                "status": "pending",
+                "message": "Project uploaded. Call POST /evaluate/{project_id} to start.",
+            },
+        )
+
     project = Project(
         id=project_id,
         name=safe_name,
@@ -3322,13 +3347,102 @@ async def get_evaluation_file_content(id: str, path: str, db: Session = Depends(
         if sym.get("file_path") == path
     ]
     
-    # Generate dynamic file intelligence summaries
+    # ── Smart Dynamic File Intelligence Summary ─────────────────────────
+    import re
+    lines = file_content.splitlines()
     ext = path.split(".")[-1].lower() if "." in path else ""
-    purpose = f"Implements core service layer functionality for the {ext.upper()} module."
-    layer = "API Gateway" if "api" in path or "route" in path else ("Database Models" if "model" in path else "Business Logic")
-    db_usage = "Reads and writes database schemas using SQLAlchemy ORM" if "model" in path or "db" in path else "No direct database dependencies detected"
-    ai_usage = "Traces AI agent prompts and CrewAI tool orchestrations" if "agent" in path or "crew" in path else "No active AI configurations detected"
     
+    # Extract docstrings or header comments
+    docstring = ""
+    comment_block = []
+    for line in lines[:15]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith('"""') or stripped.startswith("'''"):
+            match = re.search(r'["\']{3}(.*?)["\']{3}', line)
+            if match:
+                docstring = match.group(1).strip()
+                break
+            else:
+                docstring = stripped.replace('"""', '').replace("'''", '').strip()
+                break
+        elif stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("/*"):
+            clean = stripped.lstrip("#/ *").strip()
+            if clean:
+                comment_block.append(clean)
+                
+    if not docstring and comment_block:
+        docstring = " ".join(comment_block[:3])
+        
+    classes = []
+    functions = []
+    imports = []
+    
+    import_pat = re.compile(r'^(?:import\s+|from\s+(\w+)\s+import|import\s+(?:type\s+)?{?([^}]+)}?\s+from)')
+    class_pat = re.compile(r'^(?:class\s+(\w+)|export\s+class\s+(\w+)|interface\s+(\w+))')
+    func_pat = re.compile(r'^(?:def\s+(\w+)|function\s+(\w+)|const\s+(\w+)\s*=\s*(?:\([^)]*\)|[^=]+)\s*=>|export\s+(?:async\s+)?function\s+(\w+))')
+    
+    for line in lines:
+        line_strip = line.strip()
+        m_imp = import_pat.match(line_strip)
+        if m_imp:
+            parts = [g for g in m_imp.groups() if g]
+            if parts:
+                imports.extend([p.strip() for p in parts[0].split(",")])
+        m_cls = class_pat.match(line_strip)
+        if m_cls:
+            cname = [g for g in m_cls.groups() if g]
+            if cname:
+                classes.append(cname[0])
+        m_func = func_pat.match(line_strip)
+        if m_func:
+            fname = [g for g in m_func.groups() if g]
+            if fname:
+                functions.append(fname[0])
+                
+    imports = list(dict.fromkeys([imp.lower() for imp in imports]))[:6]
+    classes = list(dict.fromkeys(classes))[:4]
+    functions = list(dict.fromkeys(functions))[:6]
+    
+    purpose_parts = []
+    if docstring:
+        purpose_parts.append(docstring)
+    else:
+        if classes:
+            purpose_parts.append(f"Implements: {', '.join(classes)}")
+        if functions:
+            purpose_parts.append(f"Provides functions: {', '.join(functions)}")
+            
+    if imports:
+        purpose_parts.append(f"Depends on: {', '.join(imports)}")
+        
+    purpose = " | ".join(purpose_parts) if purpose_parts else f"Implements core code logic for the {ext.upper()} module."
+    if len(purpose) > 200:
+        purpose = purpose[:197] + "..."
+        
+    # Layer taxonomy
+    layer = "Business Logic"
+    path_lower = path.lower()
+    if "api" in path_lower or "route" in path_lower or "controller" in path_lower:
+        layer = "API Layer / Routing"
+    elif "model" in path_lower or "schema" in path_lower or "db" in path_lower:
+        layer = "Database Schema / ORM Models"
+    elif "test" in path_lower or "spec" in path_lower:
+        layer = "Testing Framework"
+    elif "component" in path_lower or "view" in path_lower or "page" in path_lower or "panel" in path_lower:
+        layer = "UI / Presentation Layer"
+        
+    # Dependencies
+    content_lower = file_content.lower()
+    db_usage = "No direct database dependencies detected"
+    if any(k in content_lower for k in ("sql", "db", "query", "select", "insert", "update", "delete", "session")):
+        db_usage = "Performs database queries or defines ORM schemas"
+        
+    ai_usage = "No active AI configurations detected"
+    if any(k in content_lower for k in ("ollama", "llm", "agent", "ai", "prompt", "crew")):
+        ai_usage = "Interacts with AI models, agents, or LLM system prompts"
+        
     return {
         "path": path,
         "content": file_content,

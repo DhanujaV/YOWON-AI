@@ -56,6 +56,7 @@ function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string;
   const [simEdges, setSimEdges] = useState<Edge[]>([])
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
   const [ticksCount, setTicksCount] = useState(0)
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
   
   const { data: kgData, isLoading, isError, error, refetch } = useKnowledgeGraph(
     projectId, '', '', '', '', false
@@ -205,9 +206,9 @@ function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string;
           const distSqr = dx * dx + dy * dy || 1
           const dist = Math.sqrt(distSqr)
           
-          const minD = na.type === 'repository' || nb.type === 'repository' ? 120 : 60
+          const minD = na.type === 'repository' || nb.type === 'repository' ? 180 : (na.type === 'subsystem' || nb.type === 'subsystem' ? 150 : 120)
           if (dist < minD) {
-            const force = (minD - dist) * 0.12
+            const force = (minD - dist) * 0.3
             const fx = (dx / dist) * force
             const fy = (dy / dist) * force
             if (na.id !== draggedNodeId) { na.x! -= fx; na.y! -= fy }
@@ -226,7 +227,7 @@ function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string;
         const dy = target.y! - source.y!
         const dist = Math.sqrt(dx * dx + dy * dy) || 1
         
-        const force = (dist - 100) * 0.04
+        const force = (dist - 200) * 0.04
         const fx = (dx / dist) * force
         const fy = (dy / dist) * force
 
@@ -237,8 +238,8 @@ function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string;
       // Gravity
       currentNodes.forEach(n => {
         if (n.id === draggedNodeId) return
-        n.x! += (centerX - n.x!) * 0.015
-        n.y! += (centerY - n.y!) * 0.015
+        n.x! += (centerX - n.x!) * 0.005
+        n.y! += (centerY - n.y!) * 0.005
       })
 
       setSimNodes([...currentNodes])
@@ -449,6 +450,8 @@ function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string;
                           e.stopPropagation()
                           setDraggedNodeId(node.id)
                         }}
+                        onMouseEnter={() => setHoveredNodeId(node.id)}
+                        onMouseLeave={() => setHoveredNodeId(null)}
                         style={{ cursor: 'pointer' }}
                       >
                         <circle
@@ -457,16 +460,18 @@ function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string;
                           stroke={isSelected ? '#22d3ee' : (isExpanded ? '#fbbf24' : 'rgba(255,255,255,0.1)')}
                           strokeWidth={isSelected || isExpanded ? 2 : 1}
                         />
-                        <text
-                          y={radius + 12}
-                          textAnchor="middle"
-                          fill={isSelected ? '#22d3ee' : '#94a3b8'}
-                          fontSize="8px"
-                          fontFamily="monospace"
-                          className="pointer-events-none select-none"
-                        >
-                          {node.label}
-                        </text>
+                        {(node.type === 'repository' || node.type === 'subsystem' || isSelected || hoveredNodeId === node.id || simNodes.length < 30 || zoom > 1.4) && (
+                          <text
+                            y={radius + 12}
+                            textAnchor="middle"
+                            fill={isSelected ? '#22d3ee' : (hoveredNodeId === node.id ? '#fff' : '#94a3b8')}
+                            fontSize="8px"
+                            fontFamily="monospace"
+                            className="pointer-events-none select-none"
+                          >
+                            {node.label}
+                          </text>
+                        )}
                       </g>
                     )
                   })}

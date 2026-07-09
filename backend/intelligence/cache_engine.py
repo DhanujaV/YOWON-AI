@@ -325,9 +325,11 @@ class RepositoryAnalysisCache:
 
         artifacts = [
             "repository_tree", "architecture_graph", "dependency_graph", 
-            "technology_graph", "call_graph", "metrics", "health", 
+            "technology_graph", "call_graph", "knowledge_graph", "metrics", "health", 
             "evidence", "recommendations", "execution_intelligence",
-            "ai_intelligence", "dependency_intelligence", "capabilities"
+            "ai_intelligence", "dependency_intelligence", "capabilities",
+            "symbols", "file_contents", "detected_technologies", "technology_detections",
+            "diagnostics", "quality"
         ]
         
         # Load all separate JSON files into a consolidated dictionary
@@ -336,7 +338,7 @@ class RepositoryAnalysisCache:
             file_path = folder / f"{art}.json"
             if not file_path.exists():
                 # Defensively default to empty list or dict based on type
-                if art in ("repository_tree", "evidence", "recommendations", "capabilities", "detected_technologies", "technology_detections"):
+                if art in ("repository_tree", "evidence", "recommendations", "capabilities", "detected_technologies", "technology_detections", "symbols"):
                     data[art] = []
                 else:
                     data[art] = {}

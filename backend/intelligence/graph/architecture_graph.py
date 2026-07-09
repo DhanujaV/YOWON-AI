@@ -28,6 +28,8 @@ _ARCH_FLOW_LINKS = [
     ("infrastructure","deployment",   "Provisions environment for"),
     ("testing",      "services",      "Validates behavior of"),
     ("sandbox",      "ai_agents",     "Provides execution env to"),
+    ("frontend",     "backend",       "Requests data from"),
+    ("backend",      "database",      "Queries data from"),
 ]
 
 
