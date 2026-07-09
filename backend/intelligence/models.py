@@ -72,3 +72,11 @@ class RecommendationRecord(BaseModel):
     expected_score_gain: float
     confidence: float
     estimated_effort: str  # "LOW" | "MEDIUM" | "HIGH"
+
+from intelligence.canonical_models import (
+    RepositoryIntelligenceSchemaException,
+    CanonicalTreeDict,
+    ArchitectureModel as CanonicalArchitectureDict,
+    TechnologyGraphModel as CanonicalTechnologyDict,
+    MetricsModel
+)

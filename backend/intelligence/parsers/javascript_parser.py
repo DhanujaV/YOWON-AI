@@ -1,14 +1,25 @@
-from typing import List, Dict, Any, Optional
-from tree_sitter import Language, Parser
-import tree_sitter_javascript as tsjs
+from typing import List, Dict, Any
+try:
+    from tree_sitter import Language, Parser
+    import tree_sitter_javascript as tsjs
+    _TREE_SITTER_AVAILABLE = True
+except ImportError:
+    _TREE_SITTER_AVAILABLE = False
+    Language = None
+    Parser = None
+    tsjs = None
 from intelligence.models import SymbolRecord
 from intelligence.parsers.base_parser import BaseParser
 
 class JavaScriptParser(BaseParser):
     def __init__(self):
         super().__init__()
-        self.js_lang = Language(tsjs.language())
-        self.parser = Parser(self.js_lang)
+        if _TREE_SITTER_AVAILABLE:
+            self.js_lang = Language(tsjs.language())
+            self.parser = Parser(self.js_lang)
+        else:
+            self.js_lang = None
+            self.parser = None
         self.tree = None
 
     def parse(self) -> bool:

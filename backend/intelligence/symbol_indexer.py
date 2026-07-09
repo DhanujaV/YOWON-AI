@@ -9,6 +9,21 @@ class SymbolIndexer:
         self.by_file: Dict[str, List[SymbolRecord]] = {}
         self.by_name: Dict[str, List[SymbolRecord]] = {}
 
+    def load_symbols(self, symbols_list: List[Dict[str, Any]]) -> None:
+        """Hydrate symbol lookup mappings from cached list of dicts."""
+        self.symbols = []
+        self.by_file = {}
+        self.by_name = {}
+        for sym_data in symbols_list:
+            sym = SymbolRecord(**sym_data)
+            self.symbols.append(sym)
+            if sym.file_path not in self.by_file:
+                self.by_file[sym.file_path] = []
+            self.by_file[sym.file_path].append(sym)
+            if sym.name not in self.by_name:
+                self.by_name[sym.name] = []
+            self.by_name[sym.name].append(sym)
+
     def index_file(self, file_path: str, content: str) -> None:
         """Parse file content and add its symbols to the global index."""
         # Clean existing index entries for this file to support incremental updates

@@ -14,6 +14,15 @@ class SecurityEngine:
     def __init__(self):
         self.findings: Dict[str, List[Dict[str, Any]]] = {}
 
+    def load_findings(self, findings_list: List[Dict[str, Any]]) -> None:
+        """Hydrate findings mappings from cached list of dicts."""
+        self.findings = {}
+        for f in findings_list:
+            file_path = f.get("file_path", "")
+            if file_path not in self.findings:
+                self.findings[file_path] = []
+            self.findings[file_path].append(f)
+
     def scan_file(self, file_path: str, content: str) -> List[Dict[str, Any]]:
         """Scan file content for secrets and unsafe APIs, caching the results."""
         from intelligence.utils import safe_string, normalize_path

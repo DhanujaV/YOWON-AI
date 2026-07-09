@@ -1,5 +1,8 @@
-import React, { useState } from 'react'
-import { Cpu } from 'lucide-react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { 
+  Cpu, Search, ZoomIn, ZoomOut, RefreshCw, GitCommit,
+  GitMerge, Layers, Info, HelpCircle
+} from 'lucide-react'
 import { useKnowledgeGraph } from './queries'
 import { DashboardSection } from './DashboardSection'
 import { GraphSkeleton } from './Skeletons'
@@ -9,21 +12,285 @@ import { api } from '../../api/api'
 
 interface KnowledgeGraphPanelProps {
   projectId: string
+  onSelectNode?: (nodeName: string) => void
 }
 
-function KnowledgeGraphContent({ projectId }: { projectId: string }) {
+interface Node {
+  id: string
+  label: string
+  type: string
+  metadata?: any
+  x?: number
+  y?: number
+  vx?: number
+  vy?: number
+}
+
+interface Edge {
+  source: string
+  target: string
+  relation: string
+}
+
+function KnowledgeGraphContent({ projectId, onSelectNode }: { projectId: string; onSelectNode?: (nodeName: string) => void }) {
   const [search, setSearch] = useState('')
-  const [tech, setTech] = useState('')
-  const [lang, setLang] = useState('')
-  const [layer, setLayer] = useState('')
-  const [collapse, setCollapse] = useState(false)
   const [selectedNode, setSelectedNode] = useState<any>(null)
   
+  // Expanded nodes map (progressive drill-down)
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set<string>())
+  const [autoExpanded, setAutoExpanded] = useState(false)
+
+  // Pathfinder state
   const [pathSource, setPathSource] = useState('')
   const [pathTarget, setPathTarget] = useState('')
   const [pathResult, setPathResult] = useState<any>(null)
 
-  const { data: kgData, isLoading, isError, error, refetch } = useKnowledgeGraph(projectId, search, tech, lang, layer, collapse)
+  // Zoom / Pan state
+  const [zoom, setZoom] = useState(1.0)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDraggingCanvas, setIsDraggingCanvas] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+  // Force simulation nodes/edges
+  const [simNodes, setSimNodes] = useState<Node[]>([])
+  const [simEdges, setSimEdges] = useState<Edge[]>([])
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
+  const [ticksCount, setTicksCount] = useState(0)
+  
+  const { data: kgData, isLoading, isError, error, refetch } = useKnowledgeGraph(
+    projectId, '', '', '', '', false
+  )
+
+  const rawGraph = useMemo(() => {
+    const data = kgData?.success ? kgData.data : kgData
+    return data || { nodes: [], edges: [] }
+  }, [kgData])
+
+  // Get parent for file/symbol nodes
+  const getParentId = (nodeId: string, allEdges: Edge[]): string | null => {
+    const edge = allEdges.find(e => e.target === nodeId && (
+      e.relation === 'CONTAINS' || e.relation === 'DEFINES' || e.relation === 'EXPOSES' || e.relation === 'HAS_CAPABILITY'
+    ))
+    return edge ? edge.source : null
+  }
+
+  // Filter and build visible graph based on expansion state (Semantic Drill-down)
+  const visibleGraph = useMemo(() => {
+    if (!rawGraph.nodes || rawGraph.nodes.length === 0) return { nodes: [], edges: [] }
+
+    const allNodes: Node[] = rawGraph.nodes
+    const allEdges: Edge[] = rawGraph.edges
+
+    const isNodeVisible = (node: Node): boolean => {
+      const level = node.metadata?.level || 1
+      // Level 1 nodes (repository, capability, subsystem) are always visible
+      if (level === 1 || node.type === 'repository' || node.type === 'capability' || node.type === 'subsystem') {
+        return true
+      }
+      
+      const parentId = getParentId(node.id, allEdges)
+      if (!parentId) return false
+      
+      const parentNode = allNodes.find(n => n.id === parentId)
+      if (!parentNode) return false
+      
+      return isNodeVisible(parentNode) && expandedNodes.has(parentId)
+    }
+
+    const filteredNodes = allNodes.filter(n => {
+      if (search && !n.label.toLowerCase().includes(search.toLowerCase())) return false
+      return isNodeVisible(n)
+    })
+
+    const visibleNodeIds = new Set(filteredNodes.map(n => n.id))
+
+    const getVisibleAncestor = (id: string): string | null => {
+      if (visibleNodeIds.has(id)) return id
+      const parentId = getParentId(id, allEdges)
+      if (!parentId) return null
+      return getVisibleAncestor(parentId)
+    }
+
+    const reroutedEdges: Edge[] = []
+    const edgeKeys = new Set<string>()
+
+    allEdges.forEach(e => {
+      const srcVisible = getVisibleAncestor(e.source)
+      const tgtVisible = getVisibleAncestor(e.target)
+
+      if (srcVisible && tgtVisible && srcVisible !== tgtVisible) {
+        const key = `${srcVisible}->${tgtVisible}::${e.relation}`
+        if (!edgeKeys.has(key)) {
+          edgeKeys.add(key)
+          reroutedEdges.push({
+            source: srcVisible,
+            target: tgtVisible,
+            relation: e.relation
+          })
+        }
+      }
+    })
+
+    return {
+      nodes: filteredNodes,
+      edges: reroutedEdges
+    }
+  }, [rawGraph, expandedNodes, search])
+
+  // Reset and Auto expand root nodes
+  const resetLayout = () => {
+    setTicksCount(0)
+    setZoom(1.0)
+    setPan({ x: 0, y: 0 })
+    setSelectedNode(null)
+    setPathResult(null)
+    
+    if (visibleGraph.nodes.length === 0) return
+    const centerX = 360
+    const centerY = 240
+
+    const initialNodes = visibleGraph.nodes.map(n => {
+      const angle = Math.random() * 2 * Math.PI
+      const r = n.type === 'repository' ? 0 : 150
+      return {
+        ...n,
+        x: centerX + r * Math.cos(angle),
+        y: centerY + r * Math.sin(angle),
+        vx: 0,
+        vy: 0
+      }
+    })
+    setSimNodes(initialNodes)
+  }
+
+  // Handle data load and auto expand level 1 subsystems
+  useEffect(() => {
+    if (!autoExpanded && rawGraph.nodes && rawGraph.nodes.length > 0) {
+      const rootRepo = rawGraph.nodes.find((n: any) => n.type === 'repository')
+      const initialSet = new Set<string>()
+      if (rootRepo) {
+        initialSet.add(rootRepo.id)
+      }
+      // Auto expand first 2 subsystems
+      const subs = rawGraph.nodes.filter((n: any) => n.type === 'subsystem').slice(0, 3)
+      subs.forEach((s: any) => initialSet.add(s.id))
+      
+      setExpandedNodes(initialSet)
+      setAutoExpanded(true)
+    }
+  }, [rawGraph, autoExpanded])
+
+  useEffect(() => {
+    if (visibleGraph.nodes.length > 0) {
+      resetLayout()
+    }
+  }, [visibleGraph])
+
+  // Force simulation loop
+  useEffect(() => {
+    if (simNodes.length === 0 || ticksCount > 150) return
+
+    const centerX = 360
+    const centerY = 240
+    let currentNodes = [...simNodes]
+
+    const tick = () => {
+      // Repulsion
+      for (let i = 0; i < currentNodes.length; i++) {
+        for (let j = i + 1; j < currentNodes.length; j++) {
+          const na = currentNodes[i]
+          const nb = currentNodes[j]
+          const dx = nb.x! - na.x!
+          const dy = nb.y! - na.y!
+          const distSqr = dx * dx + dy * dy || 1
+          const dist = Math.sqrt(distSqr)
+          
+          const minD = na.type === 'repository' || nb.type === 'repository' ? 120 : 60
+          if (dist < minD) {
+            const force = (minD - dist) * 0.12
+            const fx = (dx / dist) * force
+            const fy = (dy / dist) * force
+            if (na.id !== draggedNodeId) { na.x! -= fx; na.y! -= fy }
+            if (nb.id !== draggedNodeId) { nb.x! += fx; nb.y! += fy }
+          }
+        }
+      }
+
+      // Attraction
+      simEdges.forEach(edge => {
+        const source = currentNodes.find(n => n.id === edge.source)
+        const target = currentNodes.find(n => n.id === edge.target)
+        if (!source || !target) return
+
+        const dx = target.x! - source.x!
+        const dy = target.y! - source.y!
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1
+        
+        const force = (dist - 100) * 0.04
+        const fx = (dx / dist) * force
+        const fy = (dy / dist) * force
+
+        if (source.id !== draggedNodeId) { source.x! += fx; source.y! += fy }
+        if (target.id !== draggedNodeId) { target.x! -= fx; target.y! -= fy }
+      })
+
+      // Gravity
+      currentNodes.forEach(n => {
+        if (n.id === draggedNodeId) return
+        n.x! += (centerX - n.x!) * 0.015
+        n.y! += (centerY - n.y!) * 0.015
+      })
+
+      setSimNodes([...currentNodes])
+      setTicksCount(prev => prev + 1)
+    }
+
+    const timer = setInterval(tick, 1000 / 60)
+    return () => clearInterval(timer)
+  }, [simNodes, ticksCount, draggedNodeId])
+
+  // Pan handlers
+  const handleCanvasMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.target instanceof SVGElement && e.target.tagName === 'svg') {
+      setIsDraggingCanvas(true)
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+    }
+  }
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (isDraggingCanvas) {
+      setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
+    } else if (draggedNodeId) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const mouseX = (e.clientX - rect.left - pan.x) / zoom
+      const mouseY = (e.clientY - rect.top - pan.y) / zoom
+      const nodeIndex = simNodes.findIndex(n => n.id === draggedNodeId)
+      if (nodeIndex !== -1) {
+        const updated = [...simNodes]
+        updated[nodeIndex].x = mouseX
+        updated[nodeIndex].y = mouseY
+        setSimNodes(updated)
+      }
+    }
+  }
+
+  const handleCanvasMouseUp = () => {
+    setIsDraggingCanvas(false)
+    setDraggedNodeId(null)
+  }
+
+  const handleNodeToggle = (nodeId: string) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) {
+        next.delete(nodeId)
+      } else {
+        next.add(nodeId)
+      }
+      return next
+    })
+    setTicksCount(0) // restart simulation to settle changes
+  }
 
   const findShortestPath = async () => {
     if (!pathSource || !pathTarget) return
@@ -35,188 +302,168 @@ function KnowledgeGraphContent({ projectId }: { projectId: string }) {
     }
   }
 
-  if (isLoading) {
-    return <GraphSkeleton />
+  const getNodeColor = (type: string, isExpanded: boolean) => {
+    if (type === 'repository') return '#06b6d4' // Cyan root
+    if (type === 'subsystem') return '#d97706' // Amber subsystems
+    if (type === 'capability') return '#ec4899' // Pink capabilities
+    if (type === 'file') return '#38bdf8' // Sky file
+    if (type === 'class') return '#a78bfa' // Purple class
+    if (type === 'function' || type === 'method') return '#34d399' // Emerald functions
+    if (type === 'route') return '#a75bfa' // Violet route
+    if (type === 'model') return '#fb7185' // Rose models
+    if (type === 'agent') return '#818cf8' // Indigo agents
+    if (type === 'tool') return '#fbbf24' // Yellow tools
+    return '#94a3b8'
   }
-
-  if (isError) {
-    return <PanelErrorFallback name="Knowledge Graph" error={error} refetch={refetch} />
-  }
-
-  const knowledgeGraph = kgData?.success ? kgData.data : kgData
 
   return (
     <DashboardSection id="knowledge-graph" title="Knowledge Graph" icon={Cpu} accent="amber">
       <div className="glass-card min-h-[600px] flex flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4 mb-4 font-mono">
+        
+        {/* Header / Filter Console */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-4 font-mono">
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-yowon-muted">Autonomous Project Knowledge Graph</p>
-            <h4 className="text-white text-xs font-mono mt-1">Navigate classes, functions, files, and Docker configurations.</h4>
+            <p className="text-[10px] uppercase tracking-[0.22em] text-yowon-muted font-bold">Semantic Project Knowledge Graph</p>
+            <h4 className="text-white text-xs mt-1">
+              Double-click nodes to Expand/Collapse levels (drill down).
+            </h4>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-3">
-            <input
-              type="text"
-              placeholder="Search nodes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1 text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50 font-mono w-40"
-            />
-            
-            <select
-              value={layer}
-              onChange={(e) => setLayer(e.target.value)}
-              className="bg-white/[0.03] border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500/50 font-mono bg-yowon-bg"
-            >
-              <option value="">All Layers</option>
-              <option value="frontend">Frontend</option>
-              <option value="backend">Backend</option>
-              <option value="database">Database</option>
-            </select>
-
-            <select
-              value={lang}
-              onChange={(e) => setLang(e.target.value)}
-              className="bg-white/[0.03] border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500/50 font-mono bg-yowon-bg"
-            >
-              <option value="">All Languages</option>
-              <option value="py">Python</option>
-              <option value="ts">TypeScript</option>
-              <option value="js">JavaScript</option>
-              <option value="tsx">TSX</option>
-            </select>
-
-            <label className="flex items-center gap-1.5 text-xs text-yowon-muted font-mono cursor-pointer select-none">
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-yowon-muted" />
               <input
-                type="checkbox"
-                checked={collapse}
-                onChange={(e) => setCollapse(e.target.checked)}
-                className="accent-amber-500 rounded"
+                type="text"
+                placeholder="Search symbols..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="bg-white/5 border border-white/10 rounded pl-8 pr-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500/50 font-mono w-36"
               />
-              Collapse Folders
-            </label>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg p-0.5">
+              <button onClick={() => setZoom(z => Math.min(2.0, z + 0.1))} className="p-1 text-yowon-muted hover:text-white rounded" title="Zoom In"><ZoomIn size={13} /></button>
+              <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-1 text-yowon-muted hover:text-white rounded" title="Zoom Out"><ZoomOut size={13} /></button>
+              <button onClick={resetLayout} className="p-1 text-yowon-muted hover:text-white rounded" title="Reset Layout"><RefreshCw size={13} /></button>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 bg-white/[0.02] border border-white/5 rounded-xl p-3 mb-4 font-mono">
-          <span className="text-xs font-mono text-yowon-muted">Pathfinder:</span>
+        {/* Pathfinder tracing block */}
+        <div className="flex flex-wrap items-center gap-2.5 bg-white/[0.02] border border-white/5 rounded-xl p-3 mb-4 font-mono">
+          <span className="text-[10px] text-yowon-muted uppercase font-bold">Shortest Dependency Path:</span>
           <input
             type="text"
-            placeholder="Source Node ID..."
+            placeholder="Source (e.g. backend/main.py)"
             value={pathSource}
             onChange={(e) => setPathSource(e.target.value)}
-            className="bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1 text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50 font-mono w-48"
+            className="bg-white/5 border border-white/10 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-amber-500/50 font-mono w-40"
           />
-          <span className="text-xs font-mono text-yowon-muted">to</span>
+          <span className="text-[10px] text-yowon-muted">➔</span>
           <input
             type="text"
-            placeholder="Target Node ID..."
+            placeholder="Target (e.g. models)"
             value={pathTarget}
             onChange={(e) => setPathTarget(e.target.value)}
-            className="bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1 text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50 font-mono w-48"
+            className="bg-white/5 border border-white/10 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-amber-500/50 font-mono w-40"
           />
           <button
             onClick={findShortestPath}
-            className="bg-amber-500 hover:bg-amber-600 text-black text-xs font-mono px-3 py-1 rounded-lg transition-colors font-bold"
+            className="bg-amber-500 hover:bg-amber-600 text-black text-[10px] font-mono px-3 py-1 rounded font-bold transition-all"
           >
-            Trace Dependency Path
+            Trace Path
           </button>
           {pathResult && (
-            <button
-              onClick={() => { setPathResult(null); setPathSource(''); setPathTarget('') }}
-              className="text-[10px] font-mono text-red-400 hover:underline ml-2"
-            >
-              Clear Path
-            </button>
+            <button onClick={() => { setPathResult(null); setPathSource(''); setPathTarget('') }} className="text-[10px] text-red-400 hover:underline">Clear</button>
           )}
         </div>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-3 border border-white/5 bg-black/40 rounded-xl relative overflow-hidden min-h-[400px] flex items-center justify-center">
-            {knowledgeGraph?.nodes ? (
-              <svg className="w-full h-full min-h-[450px]" style={{ cursor: 'grab' }}>
-                <defs>
-                  <marker id="arrow" viewBox="0 0 10 10" refX="15" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255, 255, 255, 0.25)" />
-                  </marker>
-                  <marker id="path-arrow" viewBox="0 0 10 10" refX="15" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
-                  </marker>
-                </defs>
-                
+        {/* Canvas SVG Grid */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* SVG Canvas Area (8 cols) */}
+          <div className="lg:col-span-8 border border-white/5 bg-black/40 rounded-xl relative overflow-hidden min-h-[440px] select-none">
+            <svg 
+              className="w-full h-full min-h-[440px]" 
+              onMouseDown={handleCanvasMouseDown}
+              onMouseMove={handleCanvasMouseMove}
+              onMouseUp={handleCanvasMouseUp}
+              onMouseLeave={handleCanvasMouseUp}
+              style={{ cursor: isDraggingCanvas ? 'grabbing' : 'grab' }}
+            >
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255, 255, 255, 0.15)" />
+                </marker>
+                <marker id="path-arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
+                </marker>
+              </defs>
+
+              <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+                {/* Render Edges */}
                 <g>
-                  {knowledgeGraph.edges.map((edge: any, idx: number) => {
-                    const total = knowledgeGraph.nodes.length || 1
-                    const srcIdx = knowledgeGraph.nodes.findIndex((n: any) => n.id === edge.source)
-                    const tgtIdx = knowledgeGraph.nodes.findIndex((n: any) => n.id === edge.target)
-                    
-                    const srcAngle = (srcIdx / total) * 2 * Math.PI
-                    const tgtAngle = (tgtIdx / total) * 2 * Math.PI
-                    
-                    const sx = 250 + 180 * Math.cos(srcAngle)
-                    const sy = 220 + 150 * Math.sin(srcAngle)
-                    const tx = 250 + 180 * Math.cos(tgtAngle)
-                    const ty = 220 + 150 * Math.sin(tgtAngle)
-                    
+                  {simEdges.map((edge: Edge, idx: number) => {
+                    const srcNode = simNodes.find(n => n.id === edge.source)
+                    const tgtNode = simNodes.find(n => n.id === edge.target)
+                    if (!srcNode || !tgtNode) return null
+
                     const isPathEdge = pathResult?.edges?.some(
                       (pe: any) => pe.source === edge.source && pe.target === edge.target
                     )
 
                     return (
-                      <line
-                        key={`edge-${idx}`}
-                        x1={sx}
-                        y1={sy}
-                        x2={tx}
-                        y2={ty}
-                        stroke={isPathEdge ? '#f59e0b' : 'rgba(255, 255, 255, 0.1)'}
-                        strokeWidth={isPathEdge ? 2.5 : 1}
-                        markerEnd={isPathEdge ? "url(#path-arrow)" : "url(#arrow)"}
-                      />
+                      <g key={`edge-${idx}`}>
+                        <line
+                          x1={srcNode.x!}
+                          y1={srcNode.y!}
+                          x2={tgtNode.x!}
+                          y2={tgtNode.y!}
+                          stroke={isPathEdge ? '#f59e0b' : 'rgba(255, 255, 255, 0.08)'}
+                          strokeWidth={isPathEdge ? 2.5 : 1}
+                          markerEnd={isPathEdge ? "url(#path-arrow)" : "url(#arrow)"}
+                        />
+                      </g>
                     )
                   })}
                 </g>
-                
+
+                {/* Render Nodes */}
                 <g>
-                  {knowledgeGraph.nodes.map((node: any, idx: number) => {
-                    const total = knowledgeGraph.nodes.length || 1
-                    const angle = (idx / total) * 2 * Math.PI
-                    const x = 250 + 180 * Math.cos(angle)
-                    const y = 220 + 150 * Math.sin(angle)
-                    
+                  {simNodes.map(node => {
                     const isSelected = selectedNode?.id === node.id
-                    const isPathNode = pathResult?.nodes?.some((pn: any) => pn.id === node.id)
-                    
-                    let color = '#a1a1aa'
-                    if (node.type === 'file') color = '#38bdf8'
-                    else if (node.type === 'class') color = '#a78bfa'
-                    else if (node.type === 'function') color = '#34d399'
-                    else if (node.type === 'api') color = '#f472b6'
-                    else if (node.type === 'model') color = '#fbbf24'
-                    else if (node.type === 'library') color = '#f87171'
-                    else if (node.type === 'docker_service') color = '#22c55e'
+                    const isExpanded = expandedNodes.has(node.id)
+                    const color = getNodeColor(node.type, isExpanded)
+                    const radius = node.type === 'repository' ? 14 : (node.type === 'subsystem' ? 10 : 6)
 
                     return (
                       <g
                         key={node.id}
-                        transform={`translate(${x}, ${y})`}
-                        onClick={() => setSelectedNode(node)}
+                        transform={`translate(${node.x!}, ${node.y!})`}
+                        onClick={() => {
+                          setSelectedNode(node)
+                          if (onSelectNode) onSelectNode(node.label)
+                        }}
+                        onDoubleClick={() => handleNodeToggle(node.id)}
+                        onMouseDown={e => {
+                          e.stopPropagation()
+                          setDraggedNodeId(node.id)
+                        }}
                         style={{ cursor: 'pointer' }}
                       >
                         <circle
-                          r={isSelected ? 10 : 7}
+                          r={radius}
                           fill={color}
-                          stroke={isPathNode ? '#ffffff' : (isSelected ? '#fbbf24' : 'none')}
-                          strokeWidth={2}
-                          className="transition-all duration-300"
+                          stroke={isSelected ? '#22d3ee' : (isExpanded ? '#fbbf24' : 'rgba(255,255,255,0.1)')}
+                          strokeWidth={isSelected || isExpanded ? 2 : 1}
                         />
                         <text
-                          y={isSelected ? 20 : 16}
+                          y={radius + 12}
                           textAnchor="middle"
-                          fill="#e4e4e7"
-                          fontSize={isSelected ? '10px' : '8px'}
+                          fill={isSelected ? '#22d3ee' : '#94a3b8'}
+                          fontSize="8px"
                           fontFamily="monospace"
-                          className="pointer-events-none select-none bg-black/40 px-1"
+                          className="pointer-events-none select-none"
                         >
                           {node.label}
                         </text>
@@ -224,57 +471,113 @@ function KnowledgeGraphContent({ projectId }: { projectId: string }) {
                     )
                   })}
                 </g>
-              </svg>
-            ) : (
-              <div className="text-yowon-muted text-xs font-mono">No knowledge graph nodes available.</div>
-            )}
-            <div className="absolute bottom-3 left-3 flex gap-4 text-[9px] font-mono text-yowon-muted bg-black/50 p-2 rounded-lg border border-white/5">
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#38bdf8]" />File</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#a78bfa]" />Class</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#34d399]" />Function</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#fbbf24]" />Model</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#f87171]" />Library</div>
-            </div>
+              </g>
+            </svg>
+            
           </div>
-
-          <div className="lg:col-span-1 border border-white/5 bg-white/[0.01] rounded-xl p-4 flex flex-col justify-between font-mono text-xs overflow-y-auto max-h-[500px]">
+ 
+          {/* Right Side: Symbol Inspector (4 cols) */}
+          <div className="lg:col-span-4 border border-white/5 bg-white/[0.01] rounded-xl p-4 flex flex-col font-mono text-xs overflow-y-auto max-h-[440px]">
             {selectedNode ? (
               <div className="space-y-4">
-                <div>
-                  <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <span className="text-[9px] text-cyan-300 font-bold uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded">
                     {selectedNode.type.toUpperCase()}
                   </span>
-                  <h5 className="text-white font-bold text-sm mt-2 break-all">{selectedNode.label}</h5>
-                  <p className="text-[10px] text-yowon-muted mt-1 break-all font-mono">ID: {selectedNode.id}</p>
+                  <button
+                    onClick={() => handleNodeToggle(selectedNode.id)}
+                    className="text-[9px] text-yowon-muted hover:text-white"
+                  >
+                    {expandedNodes.has(selectedNode.id) ? 'COLLAPSE NODE' : 'DRILL DOWN'}
+                  </button>
                 </div>
-
-                <div className="border-t border-white/5 pt-3">
-                  <span className="text-yowon-muted text-[10px] block">Description:</span>
-                  <p className="text-white/80 mt-1 leading-relaxed">{selectedNode.metadata?.description || "No description provided."}</p>
+ 
+                <div>
+                  <h4 className="text-white text-sm font-bold font-display">{selectedNode.label}</h4>
+                  <p className="text-[10px] text-yowon-muted mt-0.5">ID: {selectedNode.id.split('::').pop()}</p>
                 </div>
+ 
+                <div className="space-y-3.5 pt-2 border-t border-white/5 leading-relaxed text-slate-300">
+                  {selectedNode.metadata?.description && (
+                    <div>
+                      <span className="text-yowon-muted text-[8px] block">SEMANTIC DETAILS</span>
+                      <p className="text-white/80 mt-1 text-[11px] font-sans">{selectedNode.metadata.description}</p>
+                    </div>
+                  )}
 
-                {selectedNode.metadata?.layer && (
-                  <div className="border-t border-white/5 pt-3">
-                    <span className="text-yowon-muted text-[10px] block">Architecture Layer:</span>
-                    <span className="text-cyan-400 mt-1 block capitalize">{selectedNode.metadata.layer}</span>
-                  </div>
-                )}
+                  {selectedNode.metadata?.language && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-yowon-muted text-[8px] block">LANGUAGE</span>
+                        <span className="text-white font-bold block mt-0.5">{selectedNode.metadata.language}</span>
+                      </div>
+                      {selectedNode.metadata?.framework && (
+                        <div>
+                          <span className="text-yowon-muted text-[8px] block">FRAMEWORK</span>
+                          <span className="text-white font-bold block mt-0.5">{selectedNode.metadata.framework}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedNode.metadata?.layer && (
+                    <div>
+                      <span className="text-yowon-muted text-[8px] block">ARCHITECTURAL LAYER</span>
+                      <span className="text-cyan-400 font-bold block mt-0.5">{selectedNode.metadata.layer.toUpperCase()}</span>
+                    </div>
+                  )}
+
+                  {selectedNode.metadata?.base_classes && selectedNode.metadata.base_classes.length > 0 && (
+                    <div>
+                      <span className="text-yowon-muted text-[8px] block">INHERITS FROM</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedNode.metadata.base_classes.map((cls: string) => (
+                          <span key={cls} className="text-[9px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-slate-300">{cls}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.metadata?.methods && selectedNode.metadata.methods.length > 0 && (
+                    <div>
+                      <span className="text-yowon-muted text-[8px] block">DECLARED METHODS ({selectedNode.metadata.methods.length})</span>
+                      <div className="max-h-24 overflow-y-auto pr-1 space-y-1 mt-1 text-[9.5px]">
+                        {selectedNode.metadata.methods.map((method: string) => (
+                          <div key={method} className="text-emerald-400 font-bold font-mono">ƒ {method}()</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+ 
+                  {selectedNode.metadata?.file_path && (
+                    <div>
+                      <span className="text-yowon-muted text-[8px] block">DEFINED IN PATH</span>
+                      <p className="bg-black/25 p-2 rounded border border-white/5 break-all text-[10px] font-mono mt-1">
+                        {selectedNode.metadata.file_path}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="text-yowon-muted py-12 text-center text-xs">Select a node in the graph to inspect AST metadata.</div>
+              <div className="flex flex-col items-center justify-center py-20 text-center text-yowon-muted">
+                <HelpCircle size={28} className="text-yowon-muted/30 mb-2" />
+                <p className="text-xs">Select any node in the graph to inspect AST details.</p>
+              </div>
             )}
           </div>
+ 
         </div>
       </div>
     </DashboardSection>
   )
 }
 
-export default function KnowledgeGraphPanel({ projectId }: KnowledgeGraphPanelProps) {
+export default function KnowledgeGraphPanel({ projectId, onSelectNode }: KnowledgeGraphPanelProps) {
   return (
     <ErrorBoundary name="Knowledge Graph Panel">
       <RepositoryIntelligenceWrapper projectId={projectId}>
-        <KnowledgeGraphContent projectId={projectId} />
+        <KnowledgeGraphContent projectId={projectId} onSelectNode={onSelectNode} />
       </RepositoryIntelligenceWrapper>
     </ErrorBoundary>
   )

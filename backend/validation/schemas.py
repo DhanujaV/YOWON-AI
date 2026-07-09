@@ -8,6 +8,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+class EvaluationIncompleteException(Exception):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.details = details or {}
+
 DEFAULT_ROADMAP = [
     "Stabilize evidence package with README, architecture notes, and setup instructions",
     "Add automated tests and publish repeatable validation results",

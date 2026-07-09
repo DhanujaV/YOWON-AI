@@ -1,13 +1,8 @@
-import pytest
-from unittest.mock import MagicMock
 from intelligence.parsers.parser_registry import ParserRegistry
 from intelligence.symbol_indexer import SymbolIndexer
 from intelligence.security_engine import SecurityEngine
-from intelligence.evidence_engine import EvidenceEngine
-from intelligence.architecture_engine import ArchitectureEngine
 from intelligence.metrics_engine import MetricsEngine
 from intelligence.health_engine import HealthEngine
-from intelligence.recommendation_engine import RecommendationEngine
 
 MOCK_PYTHON_CODE = """
 import os

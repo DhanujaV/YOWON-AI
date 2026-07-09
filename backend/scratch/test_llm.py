@@ -34,6 +34,6 @@ crew = Crew(
 try:
     res = crew.kickoff()
     print("RESULT:", res)
-except Exception as e:
+except Exception:
     import traceback
     traceback.print_exc()

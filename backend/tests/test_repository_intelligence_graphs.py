@@ -1,12 +1,8 @@
-import pytest
-from typing import Dict, Any, List
 from intelligence.graph.architecture_graph import ArchitectureGraphBuilder
-from intelligence.graph.dependency_graph import DependencyGraphBuilder
 from intelligence.graph.call_graph import CallGraphBuilder
 from intelligence.graph.technology_graph import TechnologyGraphBuilder
 from intelligence.health_engine import HealthEngine
 from intelligence.metrics_engine import MetricsEngine
-from intelligence.evidence_engine import EvidenceEngine
 from eval_context.context_slicer import slice_context_for_agent
 
 def test_technology_graph_builder():

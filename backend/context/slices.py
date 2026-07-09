@@ -43,7 +43,7 @@ def slice_context_for_agents(ctx: dict[str, Any]) -> dict[str, str]:
         technical_parts.extend([
             f"Repo: {gh.get('name')} | Language: {gh.get('language')}",
             f"README excerpt:\n{(gh.get('readme') or '')[:2000]}",
-            f"Folder structure:\n" + "\n".join((gh.get("folder_structure") or [])[:40]),
+            "Folder structure:\n" + "\n".join((gh.get("folder_structure") or [])[:40]),
         ])
         deps = gh.get("dependencies") or {}
         if deps:

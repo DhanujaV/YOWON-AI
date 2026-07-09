@@ -1,6 +1,6 @@
 import json
 from collections import deque
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
 from database import KnowledgeGraphNode, KnowledgeGraphEdge
 

@@ -24,7 +24,6 @@ from database import (
     Evidence,
     Recommendation,
     Report,
-    EvaluationEvent,
     get_db,
 )
 

@@ -1,15 +1,11 @@
-import pytest
-import threading
-import time
 import shutil
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-from sqlalchemy.orm import Session
+from unittest.mock import patch
 from sqlalchemy.orm import sessionmaker
 
 from database import engine, RepositorySnapshot, Evaluation, RepositoryAnalysis, IntelligenceModuleStatus, Project, Repository
 from intelligence.knowledge_graph.knowledge_graph_service import (
-    sync_knowledge_graph, get_knowledge_graph_data, get_deterministic_id
+    sync_knowledge_graph, get_knowledge_graph_data
 )
 from intelligence.cache_engine import RepositoryAnalysisCache
 from intelligence.intelligence_service import run_repository_intelligence
@@ -149,7 +145,7 @@ def test_module_failure_isolation():
 
     try:
         # Mock GitHub cache loader to raise exception, simulating source loading module failure
-        with patch("intelligence.intelligence_service._load_source_contents_from_github_cache", side_effect=RuntimeError("GitHub API quota exceeded")):
+        with patch("intelligence.repository_scan.RepositoryScan._load_github_cache", side_effect=RuntimeError("GitHub API quota exceeded")):
             # The run should degrade gracefully, loading empty files and successfully finishing analysis instead of crashing
             results = run_repository_intelligence(db, evaluation, snapshot_id)
             print("RESULTS KEYS ARE:", results.keys() if results else None)

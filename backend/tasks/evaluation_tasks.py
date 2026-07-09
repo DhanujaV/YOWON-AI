@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-from crewai import Agent, Task
 import json
+from crewai import Agent, Task
 
 from eval_context.context_slicer import truncate_brief, truncate_text
 from config import MAX_AGENT_DIGEST_CHARS
+from eval_context.prompt_registry import get_template_and_meta
 
-_JSON_RULES = """
-Score anchors: 90-100 exceptional for the supplied project type | 80-89 excellent |
-70-79 good | 60-69 average | below 60 needs improvement.
-Missing evidence is not proof of quality. Do not award 90+ without exceptional evidence.
-Max 15 words per string field. JSON only — no markdown fences. No thinking tags.
-Your entire response must be one JSON object starting with { and ending with }.
-"""
+_JSON_RULES = get_template_and_meta("common_rules")["template"]
 
 
 def _prep(brief: str, digest: str) -> tuple[str, str]:
@@ -23,24 +18,10 @@ def _prep(brief: str, digest: str) -> tuple[str, str]:
 
 def create_technical_task(agent: Agent, brief: str, digest: str) -> Task:
     brief, digest = _prep(brief, digest)
+    template = get_template_and_meta("technical_task")["template"]
+    description = template.format(brief=brief, digest=digest)
     return Task(
-        description=f"""
-Brief:
-{brief}
-
-Evidence:
-{digest}
-
-Return JSON:
-{{
-  "technical_score": <int 0-100>,
-  "strengths": ["...", "...", "..."],
-  "weaknesses": ["...", "...", "..."],
-  "risks": ["...", "...", "..."],
-  "confidence": <0.0-1.0>
-}}
-{_JSON_RULES}
-""",
+        description=description + "\n" + _JSON_RULES,
         expected_output="Single JSON object only — no other text",
         agent=agent,
     )
@@ -48,23 +29,10 @@ Return JSON:
 
 def create_security_task(agent: Agent, brief: str, digest: str) -> Task:
     brief, digest = _prep(brief, digest)
+    template = get_template_and_meta("security_task")["template"]
+    description = template.format(brief=brief, digest=digest)
     return Task(
-        description=f"""
-Brief:
-{brief}
-
-Static security evidence:
-{digest}
-
-Return JSON:
-{{
-  "security_score": <int 0-100>,
-  "risk_level": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL",
-  "critical_findings": ["...", "..."],
-  "confidence": <0.0-1.0>
-}}
-{_JSON_RULES}
-""",
+        description=description + "\n" + _JSON_RULES,
         expected_output="Single JSON object only — no other text",
         agent=agent,
     )
@@ -72,24 +40,10 @@ Return JSON:
 
 def create_innovation_task(agent: Agent, brief: str, digest: str) -> Task:
     brief, digest = _prep(brief, digest)
+    template = get_template_and_meta("innovation_task")["template"]
+    description = template.format(brief=brief, digest=digest)
     return Task(
-        description=f"""
-Brief:
-{brief}
-
-Evidence:
-{digest}
-
-Return JSON:
-{{
-  "innovation_score": <int 0-100>,
-  "scalability_score": <int 0-100>,
-  "differentiators": ["...", "...", "..."],
-  "scalability_risk": "<one sentence>",
-  "confidence": <0.0-1.0>
-}}
-{_JSON_RULES}
-""",
+        description=description + "\n" + _JSON_RULES,
         expected_output="Single JSON object only — no other text",
         agent=agent,
     )
@@ -97,31 +51,10 @@ Return JSON:
 
 def create_presentation_task(agent: Agent, brief: str, digest: str) -> Task:
     brief, digest = _prep(brief, digest)
+    template = get_template_and_meta("presentation_task")["template"]
+    description = template.format(brief=brief, digest=digest)
     return Task(
-        description=f"""
-Brief:
-{brief}
-
-Presentation materials:
-{digest}
-If no deck, PDF, or documentation exists, return explicitly:
-{{
-    "presentation_score": 0,
-    "status": "INSUFFICIENT_EVIDENCE",
-    "strengths": [],
-    "improvements": [],
-    "confidence": 0.0
-}}
-
-Otherwise return JSON:
-{{
-    "presentation_score": <int 0-100>,
-    "strengths": ["...", "...", "..."],
-    "improvements": ["...", "...", "..."],
-    "confidence": <0.0-1.0>
-}}
-{_JSON_RULES}
-""",
+        description=description + "\n" + _JSON_RULES,
         expected_output="Single JSON object only — no other text",
         agent=agent,
     )
@@ -129,23 +62,10 @@ Otherwise return JSON:
 
 def create_risk_task(agent: Agent, brief: str, digest: str) -> Task:
     brief, digest = _prep(brief, digest)
+    template = get_template_and_meta("risk_task")["template"]
+    description = template.format(brief=brief, digest=digest)
     return Task(
-        description=f"""
-Brief:
-{brief}
-
-Context:
-{digest}
-
-Return JSON:
-{{
-  "impact_score": <int 0-100>,
-  "failure_modes": ["...", "...", "...", "...", "..."],
-  "top_risks": ["...", "...", "...", "...", "..."],
-  "confidence": <0.0-1.0>
-}}
-{_JSON_RULES}
-""",
+        description=description + "\n" + _JSON_RULES,
         expected_output="Single JSON object only — no other text",
         agent=agent,
     )
@@ -156,8 +76,6 @@ def create_chief_evaluation_task(
     specialist_summary: str,
     computed: dict,
 ) -> Task:
-    import json
-
     # Chief only generates narrative synthesis. Scores are computed deterministically in Python.
     specialist_summary = specialist_summary[:3500]
     computed_json = json.dumps(computed, indent=2)
@@ -188,13 +106,13 @@ def create_chief_evaluation_task(
 def create_narrative_task(agent: Agent, numeric_summary: dict, key_findings: str) -> Task:
     # numeric_summary should contain overall_score, verdict, risk_level, agent_scores
     brief = json.dumps(numeric_summary)
-    # keep the prompt small — numeric summary plus short findings
     user_text = (
         "Numeric summary:\n"
         + brief
         + "\n\nKey findings:\n"
         + (key_findings or "")[:800]
-        + "\n\nReturn only a single JSON object with keys: executive_summary, top_strengths, top_weaknesses, recommended_fixes, roadmap, deployment_roadmap. Roadmap fields must be arrays of full action-item strings, never a single string."
+        + "\n\nCRITICAL MANDATE: You must never invent, modify, or output any scores, metrics, or ratings in the narrative content other than explaining the exact calibrated values provided in the Numeric Summary. Do not change, override, or invent new scores.\n"
+        + "\nReturn only a single JSON object with keys: executive_summary, top_strengths, top_weaknesses, recommended_fixes, roadmap, deployment_roadmap. Roadmap fields must be arrays of full action-item strings, never a single string."
     )
     return Task(
         description=user_text,

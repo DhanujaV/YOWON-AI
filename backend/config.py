@@ -2,23 +2,26 @@
 config.py â€” Central configuration for YOWON AI.
 """
 
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
+import sys
+IS_TESTING = "pytest" in sys.modules or any("pytest" in arg for arg in sys.argv)
+
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 REPORT_DIR = BASE_DIR / "reports"
 CHROMA_DIR = BASE_DIR / "chroma_db"
-REPOSITORY_CACHE_DIR = BASE_DIR / "repository_cache"
+REPOSITORY_CACHE_DIR = BASE_DIR / ("repository_cache_test" if IS_TESTING else "repository_cache")
 
 UPLOAD_DIR.mkdir(exist_ok=True)
 REPORT_DIR.mkdir(exist_ok=True)
 CHROMA_DIR.mkdir(exist_ok=True)
 REPOSITORY_CACHE_DIR.mkdir(exist_ok=True)
-
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
 

@@ -1,5 +1,4 @@
 import ast
-import hashlib
 from typing import List, Dict, Any, Optional
 from intelligence.models import SymbolRecord
 from intelligence.parsers.base_parser import BaseParser

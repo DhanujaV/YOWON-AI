@@ -613,26 +613,41 @@ def calibrate_agent_scores(
 
     return scores, reasons
 
-
 def compute_overall(
     technical: TechnicalReport, security: SecurityReport, innovation: InnovationReport,
     presentation: PresentationReport, risk: RiskReport, *, project_type: str = "Hackathon Project",
     evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from validation.schemas import EvaluationIncompleteException
+    submitted_project_type = (evidence or {}).get("submitted_project_type") or project_type
+    presentation_enabled = is_presentation_enabled(submitted_project_type)
+
+    if technical is None or getattr(technical, "technical_score", None) is None:
+        raise EvaluationIncompleteException("Scoring incomplete: Technical Agent score is missing.")
+    if security is None or getattr(security, "security_score", None) is None:
+        raise EvaluationIncompleteException("Scoring incomplete: Security Agent score is missing.")
+    if innovation is None or getattr(innovation, "innovation_score", None) is None:
+        raise EvaluationIncompleteException("Scoring incomplete: Innovation Agent score is missing.")
+    if risk is None or getattr(risk, "impact_score", None) is None:
+        raise EvaluationIncompleteException("Scoring incomplete: Risk Agent score is missing.")
+    if presentation_enabled:
+        if presentation is None or getattr(presentation, "presentation_score", None) is None:
+            raise EvaluationIncompleteException("Scoring incomplete: Presentation Agent score is missing.")
+
     evidence = evidence or {"checks": {}, "data_availability": 0, "repository_coverage": 0, "json_validity": 0}
     submitted_project_type = evidence.get("submitted_project_type") or project_type
     rubric_type = submitted_project_type if submitted_project_type and submitted_project_type != "Auto Detect" else project_type
     rubric = get_rubric(rubric_type)
-    presentation_enabled = is_presentation_enabled(submitted_project_type)
+    
     raw_scores = {
-        "technical": getattr(technical, "technical_score", 0) if technical is not None else 0,
-        "security": getattr(security, "security_score", 0) if security is not None else 0,
-        "scalability": getattr(innovation, "scalability_score", 0) if innovation is not None else 0,
-        "innovation": getattr(innovation, "innovation_score", 0) if innovation is not None else 0,
-        "impact": getattr(risk, "impact_score", 0) if risk is not None else 0,
+        "technical": int(getattr(technical, "technical_score")),
+        "security": int(getattr(security, "security_score")),
+        "scalability": int(getattr(innovation, "scalability_score", getattr(innovation, "innovation_score"))),
+        "innovation": int(getattr(innovation, "innovation_score")),
+        "impact": int(getattr(risk, "impact_score")),
     }
     if presentation_enabled:
-        raw_scores["presentation"] = getattr(presentation, "presentation_score", 0) if presentation is not None else 0
+        raw_scores["presentation"] = int(getattr(presentation, "presentation_score"))
     raw_scores = {k: max(0, min(100, int(v))) for k, v in raw_scores.items()}
     calibrated_scores, calibration_reasons = calibrate_agent_scores(
         raw_scores, evidence, rubric["project_type"], presentation_enabled=presentation_enabled
@@ -643,14 +658,89 @@ def compute_overall(
         "business_feasibility": calibrated_scores.get("impact", 0),
     }
 
-    # 6. Add validation before compute_overall()
+    # Verify that no required keys from rubric weights are missing from calibrated scores
     missing = set(rubric["weights"]) - set(scoring_inputs)
     if missing:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning("Scoring inputs missing keys from rubric weights: %s. Populating safe defaults.", missing)
-        for key in missing:
-            scoring_inputs[key] = 0
+        raise EvaluationIncompleteException(f"Scoring incomplete: Rubric weight dimensions {missing} could not be calculated.")
+
+    # Build detailed Score Provenance hierarchy
+    provenance = {}
+    provenance["technical"] = {
+        "originating_agent": "Forge (Technical Specialist)",
+        "weight": rubric["weights"].get("technical", 0.3),
+        "raw_score": int(getattr(technical, "technical_score")),
+        "calibrated_score": int(calibrated_scores["technical"]),
+        "confidence": float(getattr(technical, "confidence", 0.85)),
+        "reasoning": "Calibrated based on codebase size, architecture mapping, and dependencies.",
+        "evidence": [
+            {
+                "rule_id": reason.split(" (")[0] if " (" in reason else reason,
+                "confidence": 0.85
+            }
+            for reason in calibration_reasons.get("technical", [])
+        ]
+    }
+    provenance["security"] = {
+        "originating_agent": "Sentinel (Security Specialist)",
+        "weight": rubric["weights"].get("security", 0.15),
+        "raw_score": int(getattr(security, "security_score")),
+        "calibrated_score": int(calibrated_scores["security"]),
+        "confidence": float(getattr(security, "confidence", 0.85)),
+        "reasoning": "Calibrated based on critical/high vulnerabilities and secrets scan.",
+        "evidence": [
+            {
+                "rule_id": reason.split(" (")[0] if " (" in reason else reason,
+                "confidence": 0.85
+            }
+            for reason in calibration_reasons.get("security", [])
+        ]
+    }
+    provenance["innovation"] = {
+        "originating_agent": "Visionary (Innovation Specialist)",
+        "weight": rubric["weights"].get("innovation", 0.25),
+        "raw_score": int(getattr(innovation, "innovation_score")),
+        "calibrated_score": int(calibrated_scores["innovation"]),
+        "confidence": float(getattr(innovation, "confidence", 0.85)),
+        "reasoning": "Calibrated based on novelty, differentiators, and algorithms.",
+        "evidence": [
+            {
+                "rule_id": reason.split(" (")[0] if " (" in reason else reason,
+                "confidence": 0.85
+            }
+            for reason in calibration_reasons.get("innovation", [])
+        ]
+    }
+    provenance["impact"] = {
+        "originating_agent": "Guardian (Risk Specialist)",
+        "weight": rubric["weights"].get("impact", rubric["weights"].get("risk", rubric["weights"].get("business_feasibility", 0.2))),
+        "raw_score": int(getattr(risk, "impact_score")),
+        "calibrated_score": int(calibrated_scores["impact"]),
+        "confidence": float(getattr(risk, "confidence", 0.85)),
+        "reasoning": "Calibrated based on operational, development, and license risk.",
+        "evidence": [
+            {
+                "rule_id": reason.split(" (")[0] if " (" in reason else reason,
+                "confidence": 0.85
+            }
+            for reason in calibration_reasons.get("impact", [])
+        ]
+    }
+    if presentation_enabled:
+        provenance["presentation"] = {
+            "originating_agent": "Showcase (Presentation Specialist)",
+            "weight": rubric["weights"].get("presentation", 0.1),
+            "raw_score": int(getattr(presentation, "presentation_score")),
+            "calibrated_score": int(calibrated_scores["presentation"]),
+            "confidence": float(getattr(presentation, "confidence", 0.85)),
+            "reasoning": "Calibrated based on pitch deck slide quality and readme coverage.",
+            "evidence": [
+                {
+                    "rule_id": reason.split(" (")[0] if " (" in reason else reason,
+                    "confidence": 0.85
+                }
+                for reason in calibration_reasons.get("presentation", [])
+            ]
+        }
 
     weighted_score = round(sum(scoring_inputs.get(k, 0) * weight for k, weight in rubric["weights"].items()))
 
@@ -743,6 +833,7 @@ def compute_overall(
         "penalties": penalties, "missing_evidence": missing, "positive_factors": positive_factors,
         "blocking_issues": security.critical_findings[:3] if security.risk_level in ("HIGH", "CRITICAL") else [],
         "top_strengths": (strengths + positive_factors)[:5], "top_weaknesses": (weaknesses + missing)[:5],
+        "provenance": provenance,
     }
 
 
@@ -858,7 +949,7 @@ def _confidence_sources(evidence: dict[str, Any]) -> list[str]:
         f"Repository completeness: {evidence.get('repository_completeness_score', 0)}/100",
         "Documentation quality: present" if checks.get("documentation") or stats.get("documentation_files", 0) else "Documentation quality: limited",
         f"Evidence coverage: {evidence.get('repository_coverage', 0)}/100",
-        f"Agent agreement: inferred from calibrated specialist scores",
+        "Agent agreement: inferred from calibrated specialist scores",
     ]
     if checks.get("model_artifact"):
         sources.append("Trained ML model artifact detected")

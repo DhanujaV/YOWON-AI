@@ -138,8 +138,15 @@ export function useTimeline(projectId: string) {
   return useQuery({
     queryKey: ['timeline', projectId],
     queryFn: async ({ signal }) => {
-      const res = await api.get(`/projects/${projectId}/history`, { signal })
-      return res.data
+      // Try evaluation-scoped endpoint first (projectId from URL is evaluation ID).
+      // Falls back to project-scoped if the first fails.
+      try {
+        const res = await api.get(`/evaluations/${projectId}/history`, { signal })
+        return res.data
+      } catch {
+        const res = await api.get(`/projects/${projectId}/history`, { signal })
+        return res.data
+      }
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
@@ -150,7 +157,7 @@ export function useKnowledgeGraph(projectId: string, search: string, tech: strin
   return useQuery({
     queryKey: ['knowledge-graph', projectId, search, tech, lang, layer, collapse],
     queryFn: async ({ signal }) => {
-      let url = `/projects/${projectId}/knowledge-graph?collapse=${collapse}`
+      let url = `/evaluations/${projectId}/knowledge-graph?collapse=${collapse}`
       if (search) url += `&search=${encodeURIComponent(search)}`
       if (tech) url += `&tech=${encodeURIComponent(tech)}`
       if (lang) url += `&lang=${encodeURIComponent(lang)}`
@@ -181,5 +188,89 @@ export function useIntelStatus(projectId: string) {
       }
       return 3000 // Poll every 3 seconds while running
     },
+  })
+}
+
+export function useExecutionIntelligence(projectId: string) {
+  return useQuery({
+    queryKey: ['execution-intelligence', projectId],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/execution-intelligence`, { signal })
+      return res.data
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useAIIntelligence(projectId: string) {
+  return useQuery({
+    queryKey: ['ai-intelligence', projectId],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/ai-intelligence`, { signal })
+      return res.data
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useCapabilities(projectId: string) {
+  return useQuery({
+    queryKey: ['capabilities', projectId],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/capabilities`, { signal })
+      return res.data
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useRepositoryStory(projectId: string) {
+  return useQuery({
+    queryKey: ['repository-story', projectId],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/repository-story`, { signal })
+      return res.data
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useExecutiveSummary(projectId: string) {
+  return useQuery({
+    queryKey: ['executive-summary', projectId],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/executive-summary`, { signal })
+      return res.data
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useTraceNodes(projectId: string, node: string) {
+  return useQuery({
+    queryKey: ['trace-nodes', projectId, node],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/trace-nodes?node=${encodeURIComponent(node)}`, { signal })
+      return res.data
+    },
+    enabled: !!projectId && !!node,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useDependencyIntelligence(projectId: string) {
+  return useQuery({
+    queryKey: ['dependency-intelligence', projectId],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(`/evaluations/${projectId}/dependency-intelligence`, { signal })
+      return res.data
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
   })
 }

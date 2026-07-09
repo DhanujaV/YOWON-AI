@@ -4,17 +4,18 @@ git_provider.py — Abstract Git Provider interface and GitHub implementation.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
+import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import Any, Optional
-from urllib.parse import urlparse
 
 from github import Github, GithubException
 from config import GITHUB_TOKEN
 from security import validate_github_url
+
+logger = logging.getLogger(__name__)
+
 
 
 class GitProvider(ABC):
@@ -52,10 +53,24 @@ class GitHubProvider(GitProvider):
             raise ValueError(f"Cannot parse GitHub repo name from URL: {url}")
         return match.group(1)
 
+    def _get_repo(self, repo_name: str):
+        try:
+            return self.client.get_repo(repo_name)
+        except GithubException as exc:
+            if exc.status == 401 or "bad credentials" in str(exc).lower():
+                logger.warning(
+                    "[GitHub] Token authentication failed (Bad credentials). "
+                    "Falling back to anonymous client for repo: %s",
+                    repo_name
+                )
+                self.client = Github()  # Fallback to anonymous
+                return self.client.get_repo(repo_name)
+            raise
+
     def get_repo_details(self, url: str) -> dict[str, Any]:
         repo_name = self._repo_name_from_url(url)
         try:
-            repo = self.client.get_repo(repo_name)
+            repo = self._get_repo(repo_name)
             license_key = None
             try:
                 lic = repo.get_license()
@@ -82,10 +97,11 @@ class GitHubProvider(GitProvider):
     def get_latest_commit(self, url: str, branch: Optional[str] = None) -> dict[str, Any]:
         repo_name = self._repo_name_from_url(url)
         try:
-            repo = self.client.get_repo(repo_name)
+            repo = self._get_repo(repo_name)
             target_branch = branch or repo.default_branch
             git_branch = repo.get_branch(target_branch)
             commit_sha = git_branch.commit.sha
+
             
             # Fetch tree SHA
             tree_sha = None

@@ -60,7 +60,7 @@ class HealthEngine:
         file_metrics: Dict[str, Dict[str, Any]] # Map of file -> metrics dict
     ) -> Dict[str, Any]:
         """Calculates 6 dimensions of repository health based on YAML configuration."""
-        from intelligence.utils import safe_list, safe_dict, safe_string, normalize_dependency_name, normalize_path
+        from intelligence.utils import safe_list, safe_dict, normalize_dependency_name, normalize_path
         
         # Normalize collections
         files = [normalize_path(f) for f in safe_list(files)]

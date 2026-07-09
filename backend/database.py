@@ -206,6 +206,21 @@ class Evaluation(Base):
     prompt_version: Optional[str] = Column(String(50), nullable=True)
     rubric_version: Optional[str] = Column(String(50), nullable=True)
 
+    # Extended Versioning & Integrity metadata
+    analysis_engine_version: Optional[str] = Column(String(50), nullable=True)
+    parser_version: Optional[str] = Column(String(50), nullable=True)
+    rule_registry_version: Optional[str] = Column(String(50), nullable=True)
+    scoring_version: Optional[str] = Column(String(50), nullable=True)
+    evaluation_session_version: Optional[str] = Column(String(50), nullable=True)
+
+    # Snapshot Fingerprint
+    repository_fingerprint: Optional[str] = Column(String(64), nullable=True)
+    commit_sha: Optional[str] = Column(String(40), nullable=True)
+    tree_sha: Optional[str] = Column(String(40), nullable=True)
+    default_branch: Optional[str] = Column(String(100), nullable=True)
+    repository_hash: Optional[str] = Column(String(64), nullable=True)
+    snapshot_timestamp: Optional[datetime] = Column(DateTime, nullable=True)
+
     project = relationship("Project", back_populates="evaluations")
     snapshot = relationship("RepositorySnapshot", back_populates="evaluations")
     agent_evaluations = relationship("AgentEvaluation", back_populates="evaluation", cascade="all, delete-orphan")
@@ -213,6 +228,11 @@ class Evaluation(Base):
     recommendations = relationship("Recommendation", back_populates="evaluation", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="evaluation", cascade="all, delete-orphan")
     events = relationship("EvaluationEvent", back_populates="evaluation", cascade="all, delete-orphan")
+    provenance = relationship("ScoreProvenance", back_populates="evaluation", cascade="all, delete-orphan")
+    stage_timings = relationship("PipelineStageTiming", back_populates="evaluation", cascade="all, delete-orphan")
+    prompt_metrics = relationship("AgentPromptMetric", back_populates="evaluation", cascade="all, delete-orphan")
+    diagnostics = relationship("PipelineDiagnostic", back_populates="evaluation", cascade="all, delete-orphan")
+    audits = relationship("EvaluationAudit", back_populates="evaluation", cascade="all, delete-orphan")
 
 
 class AgentEvaluation(Base):
@@ -384,6 +404,104 @@ class IntelligenceModuleStatus(Base):
 
     analysis = relationship("RepositoryAnalysis")
 
+
+
+class ScoreProvenance(Base):
+    __tablename__ = "score_provenance"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    evaluation_id = Column(String(36), ForeignKey("evaluations.evaluation_id"), nullable=False)
+    dimension = Column(String(50), nullable=False)
+    originating_agent = Column(String(100), nullable=False)
+    weight = Column(Float, nullable=False)
+    raw_score = Column(Integer, nullable=False)
+    calibrated_score = Column(Integer, nullable=False)
+    confidence = Column(Float, nullable=False)
+    reasoning = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    evaluation = relationship("Evaluation", back_populates="provenance")
+    evidence = relationship("ProvenanceEvidence", back_populates="provenance", cascade="all, delete-orphan")
+
+
+class ProvenanceEvidence(Base):
+    __tablename__ = "provenance_evidence"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    provenance_id = Column(String(36), ForeignKey("score_provenance.id"), nullable=False)
+    rule_id = Column(String(100), nullable=False)
+    file_path = Column(String(512), nullable=True)
+    line_start = Column(Integer, nullable=True)
+    line_end = Column(Integer, nullable=True)
+    confidence = Column(Float, nullable=False)
+    
+    provenance = relationship("ScoreProvenance", back_populates="evidence")
+
+
+class PipelineStageTiming(Base):
+    __tablename__ = "pipeline_stage_timings"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    evaluation_id = Column(String(36), ForeignKey("evaluations.evaluation_id"), nullable=False)
+    stage = Column(String(100), nullable=False)
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=False)
+    duration_seconds = Column(Float, nullable=False)
+    
+    evaluation = relationship("Evaluation", back_populates="stage_timings")
+
+
+class AgentPromptMetric(Base):
+    __tablename__ = "agent_prompt_metrics"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    evaluation_id = Column(String(36), ForeignKey("evaluations.evaluation_id"), nullable=False)
+    agent_name = Column(String(100), nullable=False)
+    prompt_size_chars = Column(Integer, nullable=False)
+    completion_size_chars = Column(Integer, nullable=False)
+    latency_seconds = Column(Float, nullable=False)
+    
+    evaluation = relationship("Evaluation", back_populates="prompt_metrics")
+
+
+class PipelineDiagnostic(Base):
+    __tablename__ = "pipeline_diagnostics"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    evaluation_id = Column(String(36), ForeignKey("evaluations.evaluation_id"), nullable=False)
+    files_scanned = Column(Integer, default=0)
+    ignored_files = Column(Integer, default=0)
+    symbols_indexed = Column(Integer, default=0)
+    evidence_count = Column(Integer, default=0)
+    graph_nodes = Column(Integer, default=0)
+    graph_edges = Column(Integer, default=0)
+    cache_hit = Column(Boolean, default=False)
+    memory_usage_mb = Column(Float, nullable=True)
+    repository_digest = Column(String(64), nullable=True)
+    evidence_digest = Column(String(64), nullable=True)
+    context_digest = Column(String(64), nullable=True)
+    prompt_digest = Column(String(64), nullable=True)
+    score_digest = Column(String(64), nullable=True)
+    narrative_digest = Column(String(64), nullable=True)
+    parsing_error = Column(Text, nullable=True)
+    evidence_error = Column(Text, nullable=True)
+    graphs_error = Column(Text, nullable=True)
+    scoring_error = Column(Text, nullable=True)
+    cache_error = Column(Text, nullable=True)
+    database_error = Column(Text, nullable=True)
+    llm_error = Column(Text, nullable=True)
+    subsystem_health_json = Column(Text, nullable=True)
+    
+    evaluation = relationship("Evaluation", back_populates="diagnostics")
+
+
+class EvaluationAudit(Base):
+    __tablename__ = "evaluation_audits"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    evaluation_id = Column(String(36), ForeignKey("evaluations.evaluation_id"), nullable=False)
+    stage = Column(String(100), nullable=False)
+    actor = Column(String(100), nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    details = Column(Text, nullable=True)
+    success = Column(Boolean, default=True)
+    duration_seconds = Column(Float, nullable=False)
+    
+    evaluation = relationship("Evaluation", back_populates="audits")
 
 
 # ── Dependency helper ──────────────────────────────────────────────────────────

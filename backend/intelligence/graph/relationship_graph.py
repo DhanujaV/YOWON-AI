@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, List
 from intelligence.models import GraphNode, GraphEdge
 from intelligence.graph.base_builder import BaseGraphBuilder
 

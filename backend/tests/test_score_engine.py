@@ -548,16 +548,18 @@ def test_score_engine_key_error_prevention():
     t, s, i, _, r = reports(75)
     evidence = {"checks": {}, "data_availability": 80}
     
-    # Try Hackathon Project (presentation enabled) with presentation=None
-    result_hackathon = compute_overall(
-        t, s, i, None, r,
-        project_type="Hackathon Project",
-        evidence=evidence
-    )
-    assert result_hackathon["overall_score"] > 0
-    assert "presentation" in result_hackathon["agent_scores"]
+    import pytest
+    from validation.schemas import EvaluationIncompleteException
 
-    # Try University Project (presentation disabled) with presentation=None
+    # Try Hackathon Project (presentation enabled) with presentation=None -> must raise exception
+    with pytest.raises(EvaluationIncompleteException):
+        compute_overall(
+            t, s, i, None, r,
+            project_type="Hackathon Project",
+            evidence=evidence
+        )
+
+    # Try University Project (presentation disabled) with presentation=None -> should succeed since presentation is disabled
     result_university = compute_overall(
         t, s, i, None, r,
         project_type="University Project",

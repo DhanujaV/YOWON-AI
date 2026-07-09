@@ -31,6 +31,9 @@ from config import (
     REPOSITORY_CACHE_DIR,
 )
 
+import logging
+logger = logging.getLogger(__name__)
+
 SOURCE_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rs", ".cpp", ".c", ".cs",
     ".php", ".rb", ".swift", ".kt", ".scala", ".sql", ".ipynb",
@@ -207,8 +210,30 @@ def _tree_file_paths(repo) -> list[str]:
             and not _is_ignored_path(item.path)
         ]
         return paths[:MAX_REPOSITORY_FILES]
-    except GithubException:
-        return []
+    except GithubException as exc:
+        logger.warning("Recursive git tree failed: %s. Falling back to BFS manual dir crawl.", exc)
+        paths = []
+        queue = [""]
+        visited_dirs = set()
+        while queue and len(paths) < MAX_REPOSITORY_FILES:
+            current_dir = queue.pop(0)
+            try:
+                contents = repo.get_contents(current_dir)
+                if not isinstance(contents, list):
+                    contents = [contents]
+                for item in contents:
+                    if item.type == "dir":
+                        if item.path not in visited_dirs and not _is_ignored_path(item.path):
+                            if item.path.count("/") < 4:
+                                visited_dirs.add(item.path)
+                                queue.append(item.path)
+                    elif item.type == "file":
+                        if not _is_ignored_path(item.path):
+                            paths.append(item.path)
+            except Exception as walk_exc:
+                logger.warning("Failed listing contents of dir %s: %s", current_dir, walk_exc)
+                continue
+        return paths[:MAX_REPOSITORY_FILES]
 
 
 def _folder_structure_from_paths(paths: list[str]) -> list[str]:
@@ -287,7 +312,15 @@ def extract_github_data(github_url: str) -> dict[str, Any]:
     try:
         repo = gh.get_repo(repo_name)
     except GithubException as exc:
-        return {"error": f"GitHub API error: {exc.data.get('message', str(exc))}"}
+        if exc.status == 401 or "bad credentials" in str(exc).lower():
+            logger.warning("[GitHub] Client token failed (Bad credentials). Falling back to anonymous client.")
+            gh = Github()
+            try:
+                repo = gh.get_repo(repo_name)
+            except GithubException as inner_exc:
+                return {"error": f"GitHub API error: {inner_exc.data.get('message', str(inner_exc))}"}
+        else:
+            return {"error": f"GitHub API error: {exc.data.get('message', str(exc))}"}
 
     result: dict[str, Any] = {
         "name": repo.full_name,

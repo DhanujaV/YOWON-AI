@@ -1,6 +1,5 @@
-import os
 from typing import List, Dict, Any
-from intelligence.models import SymbolRecord, EvidenceRecord
+from intelligence.models import SymbolRecord
 
 class MetricsEngine:
     def calculate_file_metrics(

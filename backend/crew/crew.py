@@ -23,12 +23,13 @@ from config import (
     AGENT_MODEL_PROFILES,
     AGENT_TIMEOUT_SEC,
     EVALUATION_TIMEOUT_SEC,
-    FAILED_AGENT_SCORE,
     OLLAMA_PARALLEL,
     USE_DIRECT_LLM_PRIMARY,
 )
 from eval_context.brief_builder import EvaluationBrief, build_brief
 from eval_context.context_slicer import slice_context_for_agent, truncate_brief
+from eval_context.pipeline_validator import validate_agent_output
+from validation.schemas import EvaluationIncompleteException
 from llm_utils import (
     get_model_name,
     invoke_direct_llm,
@@ -46,7 +47,6 @@ from scoring.score_engine import (
 )
 from scoring.rubrics import is_presentation_enabled
 from tasks.evaluation_tasks import (
-    create_chief_evaluation_task,
     create_narrative_task,
     create_innovation_task,
     create_presentation_task,
@@ -54,7 +54,7 @@ from tasks.evaluation_tasks import (
     create_security_task,
     create_technical_task,
 )
-from validation.json_utils import log_raw_output, parse_agent_json, validate_chief_verdict
+from validation.json_utils import log_raw_output, validate_chief_verdict
 from validation.schemas import (
     InnovationReport,
     PresentationReport,
@@ -76,41 +76,65 @@ AGENT_DISPLAY_NAMES = {
     "chief": "YOWON Prime",
 }
 
-FALLBACKS: dict[str, dict[str, Any]] = {
-    "technical": {
-        "technical_score": FAILED_AGENT_SCORE,
-        "strengths": [],
-        "weaknesses": ["Forge failed — manual technical review required"],
-        "risks": ["Incomplete automated technical assessment"],
-        "confidence": 0.15,
-    },
-    "security": {
-        "security_score": FAILED_AGENT_SCORE,
-        "risk_level": "MEDIUM",
-        "critical_findings": ["Sentinel failed — run manual security audit"],
-        "confidence": 0.15,
-    },
-    "innovation": {
-        "innovation_score": FAILED_AGENT_SCORE,
-        "scalability_score": FAILED_AGENT_SCORE,
-        "differentiators": [],
-        "scalability_risk": "Unable to assess — Visionary failure",
-        "confidence": 0.15,
-    },
-    "presentation": {
-        "presentation_score": FAILED_AGENT_SCORE,
-        "strengths": [],
-        "improvements": ["Showcase failed — provide deck for manual review"],
-        "confidence": 0.15,
-        "status": "FAILED",
-    },
-    "risk": {
-        "impact_score": FAILED_AGENT_SCORE,
-        "failure_modes": ["Guardian failed — insufficient automated assessment"],
-        "top_risks": ["Manual risk review required"],
-        "confidence": 0.15,
-    },
-}
+
+def _parse_agent_json_strict(raw: str, model_cls, name: str):
+    """
+    Parse agent JSON strictly — no fallback scores.
+    Raises EvaluationIncompleteException if the JSON cannot be parsed
+    or the required score field is missing.
+    """
+    from validation.json_utils import extract_json, AGENT_SCORE_FIELDS
+    from pydantic import ValidationError
+
+    data = extract_json(raw, label=f"specialist:{name}")
+    if data is None:
+        raise EvaluationIncompleteException(
+            f"Agent '{name}' returned unparseable JSON. "
+            "Cannot use fabricated default scores. Evaluation aborted.",
+            details={"agent": name, "stage": "json_parse", "raw_preview": (raw or "")[:300]},
+        )
+
+    # Normalize score field aliases (e.g. 'technical' → 'technical_score')
+    for score_field, short_key in (
+        ("technical_score", "technical"),
+        ("security_score", "security"),
+        ("innovation_score", "innovation"),
+        ("presentation_score", "presentation"),
+        ("impact_score", "impact"),
+    ):
+        if score_field not in data and short_key in data:
+            val = data[short_key]
+            if isinstance(val, (int, float, str)):
+                try:
+                    data[score_field] = int(float(val))
+                except Exception:
+                    pass
+
+    # Check required score field is present
+    score_field = AGENT_SCORE_FIELDS.get(model_cls.__name__)
+    if score_field and (score_field not in data or not isinstance(data.get(score_field), (int, float))):
+        raise EvaluationIncompleteException(
+            f"Agent '{name}' JSON is missing required score field '{score_field}'. "
+            "Cannot use fabricated default scores. Evaluation aborted.",
+            details={"agent": name, "stage": "json_validate", "fields_present": list(data.keys())},
+        )
+
+    try:
+        report = model_cls(**data)
+        return report, "llm"
+    except (ValidationError, Exception) as exc:
+        # Try merging only valid fields
+        valid_keys = {f for f in data if hasattr(model_cls, f)}
+        partial = {k: v for k, v in data.items() if k in valid_keys and v is not None}
+        try:
+            report = model_cls(**partial)
+            return report, "merged"
+        except Exception:
+            raise EvaluationIncompleteException(
+                f"Agent '{name}' JSON failed validation: {exc}. "
+                "Cannot use fabricated default scores. Evaluation aborted.",
+                details={"agent": name, "stage": "json_validate", "error": str(exc)},
+            )
 
 
 def _agent_system_prompt(agent: Agent) -> str:
@@ -151,6 +175,7 @@ def _run_agent_llm(
     use_fallback: bool = False,
 ) -> str:
     """Run specialist/chief: direct Ollama (default) or CrewAI with direct retry on abort."""
+    t_start = time.perf_counter()
     system_prompt = _agent_system_prompt(agent)
     user_prompt = task.description or ""
     prompt_chars = len(system_prompt) + len(user_prompt)
@@ -172,6 +197,29 @@ def _run_agent_llm(
             use_fallback=use_fallback,
         )
         if not is_crew_abort_output(raw):
+            t_duration = time.perf_counter() - t_start
+            completion_chars = len(raw)
+            try:
+                from database import SessionLocal, Evaluation, AgentPromptMetric
+                db_sess = SessionLocal()
+                eval_record = db_sess.query(Evaluation).filter(
+                    Evaluation.project_id == project_id,
+                    Evaluation.evaluation_status == "Running"
+                ).order_by(Evaluation.timestamp.desc()).first()
+                if eval_record:
+                    metric = AgentPromptMetric(
+                        evaluation_id=eval_record.evaluation_id,
+                        agent_name=label,
+                        prompt_size_chars=prompt_chars,
+                        completion_size_chars=completion_chars,
+                        latency_seconds=t_duration
+                    )
+                    db_sess.add(metric)
+                    db_sess.commit()
+            except Exception as metric_err:
+                logger.warning(f"Failed to record prompt metrics: {metric_err}")
+            finally:
+                db_sess.close()
             return raw
         logger.warning(
             "[%s] %s direct LLM returned abort-like output — retrying via CrewAI",
@@ -199,6 +247,31 @@ def _run_agent_llm(
             raise RuntimeError(
                 f"{label} failed after CrewAI abort and direct LLM recovery: {raw[:300]}"
             )
+
+    t_duration = time.perf_counter() - t_start
+    completion_chars = len(raw)
+    try:
+        from database import SessionLocal, Evaluation, AgentPromptMetric
+        db_sess = SessionLocal()
+        eval_record = db_sess.query(Evaluation).filter(
+            Evaluation.project_id == project_id,
+            Evaluation.evaluation_status == "Running"
+        ).order_by(Evaluation.timestamp.desc()).first()
+        if eval_record:
+            metric = AgentPromptMetric(
+                evaluation_id=eval_record.evaluation_id,
+                agent_name=label,
+                prompt_size_chars=prompt_chars,
+                completion_size_chars=completion_chars,
+                latency_seconds=t_duration
+            )
+            db_sess.add(metric)
+            db_sess.commit()
+    except Exception as metric_err:
+        logger.warning(f"Failed to record prompt metrics: {metric_err}")
+    finally:
+        db_sess.close()
+
     return raw
 
 
@@ -210,6 +283,7 @@ def _run_specialist(
     ctx: dict,
     model_cls,
     project_id: str,
+    session=None,
 ):
     profile = AGENT_MODEL_PROFILES.get(name, "specialist")
     model_name = get_model_name(profile)
@@ -222,7 +296,6 @@ def _run_specialist(
         message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Council review started",
     )
 
-    parse_source = "fallback"
     brief_text = truncate_brief(brief_text)
 
     try:
@@ -234,13 +307,15 @@ def _run_specialist(
         ):
             def _execute(*, use_fallback: bool = False) -> str:
                 agent = agent_factory(use_fallback=use_fallback)
-                digest = slice_context_for_agent(ctx, name)
+                # EvaluationSession is the PRIMARY source of repository knowledge
+                digest = slice_context_for_agent(ctx, name, session=session)
                 logger.info(
-                    "[%s] %s context_digest_chars=%d brief_chars=%d",
+                    "[%s] %s context_digest_chars=%d brief_chars=%d session=%s",
                     project_id[:8],
                     name,
                     len(digest),
                     len(brief_text),
+                    getattr(session, 'session_fingerprint', 'none'),
                 )
                 task = task_factory(agent, brief_text, digest)
                 return _run_agent_llm(
@@ -272,11 +347,11 @@ def _run_specialist(
 
             log_raw_output(f"specialist:{name}", raw)
             t_parse = time.perf_counter()
-            report, parse_source = parse_agent_json(
-                raw,
-                model_cls,
-                FALLBACKS[name],
-                label=f"specialist:{name}",
+            # parse_agent_json now called without fallback dict — returns None on parse failure
+            report, parse_source = _parse_agent_json_strict(
+                raw=raw,
+                model_cls=model_cls,
+                name=name,
             )
             parse_sec = round(time.perf_counter() - t_parse, 2)
             logger.info(
@@ -287,6 +362,9 @@ def _run_specialist(
                 parse_source,
             )
 
+            # Pipeline Contract Stage 3: validate agent output before score engine
+            validate_agent_output(name, report, parse_source)
+
             duration = round(time.perf_counter() - start, 2)
             score_field = {
                 "technical": "technical_score",
@@ -295,28 +373,33 @@ def _run_specialist(
                 "presentation": "presentation_score",
                 "risk": "impact_score",
             }.get(name, "score")
-            score_val = getattr(report, score_field, FAILED_AGENT_SCORE)
+            score_val = getattr(report, score_field, 0)
 
             msg = f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Completed — raw_score={score_val}/100 ({duration}s) source={parse_source}"
             if parse_source != "llm":
-                msg += " [parse degraded]"
+                msg += " [parse degraded — warning]"
 
             agent_complete(project_id, name, duration_sec=duration, message=msg)
-            err = None if parse_source == "llm" else f"json_{parse_source}"
-            return name, report, raw, err
+            return name, report, raw, None
 
+    except EvaluationIncompleteException:
+        # Re-raise: pipeline contract violations must propagate immediately
+        raise
     except Exception as exc:
         duration = round(time.perf_counter() - start, 2)
         logger.exception("[%s] Specialist %s failed: %s", project_id[:8], name, exc)
-        report = model_cls(**FALLBACKS[name])
         agent_complete(
             project_id,
             name,
             duration_sec=duration,
             error=str(exc),
-            message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Failed — {exc}",
+            message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] FAILED — {exc}",
         )
-        return name, report, json.dumps(FALLBACKS[name]), str(exc)
+        # Fail fast: no fallback scores
+        raise EvaluationIncompleteException(
+            f"Specialist agent '{name}' ({AGENT_DISPLAY_NAMES.get(name, name)}) failed: {exc}",
+            details={"agent": name, "error": str(exc), "stage": "specialist_execution"},
+        )
 
 
 def _format_report_text(
@@ -405,15 +488,20 @@ def run_evaluation(
     project_id: str,
     ctx: dict[str, Any],
     project_context_text: str | None = None,
+    session=None,
 ) -> dict[str, Any]:
     eval_start = time.perf_counter()
     failures: dict[str, str] = {}
     submitted_project_type = ctx.get("submitted_project_type", ctx.get("project_type", ""))
     presentation_enabled = is_presentation_enabled(submitted_project_type)
 
+    # Retrieve session from ctx if not passed directly
+    if session is None:
+        session = ctx.get("evaluation_session")
+
     agent_start(project_id, "coordinator", message="[COORDINATOR] Building evaluation brief")
     brief_start = time.perf_counter()
-    brief: EvaluationBrief = build_brief(ctx)
+    brief: EvaluationBrief = build_brief(ctx, session=session)
     brief_text = truncate_brief(brief.to_text())
     agent_complete(
         project_id,
@@ -486,6 +574,7 @@ def run_evaluation(
             ctx,
             model_cls,
             project_id,
+            session,
         ): name
         for name, agent_factory, task_factory, model_cls in jobs
     }
@@ -493,27 +582,25 @@ def run_evaluation(
     try:
         completed = as_completed(futures, timeout=EVALUATION_TIMEOUT_SEC)
         for future in completed:
+            # _run_specialist now raises EvaluationIncompleteException on failure
             name, report, raw, err = future.result(timeout=AGENT_TIMEOUT_SEC)
             reports[name] = report
             raw_outputs[name] = raw
-            parse_sources[name] = "llm" if not err else "fallback"
-            if err:
-                failures[name] = err
+            parse_sources[name] = "llm" if not err else "merged"
+    except EvaluationIncompleteException:
+        # Propagate immediately — no fallback scores
+        raise
     except TimeoutError:
         logger.error("[%s] Evaluation pool timed out after %ds", project_id[:8], EVALUATION_TIMEOUT_SEC)
-        for future, name in futures.items():
-            if name not in reports:
-                model_cls = next(m for n, _, _, m in jobs if n == name)
-                reports[name] = model_cls(**FALLBACKS[name])
-                raw_outputs[name] = json.dumps(FALLBACKS[name])
-                failures[name] = "pool timeout"
-                parse_sources[name] = "fallback"
-                agent_complete(
-                    project_id,
-                    name,
-                    error="pool timeout",
-                    message=f"[{AGENT_DISPLAY_NAMES.get(name, name).upper()}] Pool timeout — fallback score={FAILED_AGENT_SCORE}",
-                )
+        missing = [name for name in (n for n, *_ in jobs) if name not in reports]
+        raise EvaluationIncompleteException(
+            f"Evaluation timed out — agents {missing} did not complete within {EVALUATION_TIMEOUT_SEC}s. "
+            "No fallback scores will be used.",
+            details={"stage": "specialist_pool", "missing_agents": missing},
+        )
+
+    # All agents completed successfully — failures dict will be empty since
+    # _run_specialist now raises EvaluationIncompleteException instead of returning errors.
 
     technical: TechnicalReport = reports["technical"]
     security: SecurityReport = reports["security"]
@@ -707,7 +794,9 @@ def run_evaluation(
         "innovation_scalability": raw_outputs["innovation"],
         "risk_impact": raw_outputs["risk"],
         "coordination": brief_text,
+        "provenance": computed.get("provenance") or {},
     }
+
     if presentation_enabled:
         presentation_text = _format_report_text(
             "presentation",

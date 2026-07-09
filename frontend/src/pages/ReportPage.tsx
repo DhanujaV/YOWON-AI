@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ElementType } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Download, ArrowLeft, Shield, Cpu, Activity,
+  Download, ArrowLeft, Shield, Cpu, Activity, Compass,
   Fingerprint, Trophy, Gauge, LayoutDashboard, BarChart3, FileText, Map, Menu, PanelLeftClose,
   PanelLeftOpen, X, Wrench,
 } from 'lucide-react'
@@ -32,8 +32,10 @@ const KnowledgeGraphPanel = lazy(() => import('../components/report/KnowledgeGra
 const EvidenceExplorerPanel = lazy(() => import('../components/report/EvidenceExplorerPanel'))
 const MetricsPanel = lazy(() => import('../components/report/MetricsPanel'))
 const DiagnosticsPanel = lazy(() => import('../components/report/DiagnosticsPanel'))
+const SoftwareArchitectureNavigator = lazy(() => import('../components/report/SoftwareArchitectureNavigator').then(m => ({ default: m.SoftwareArchitectureNavigator })))
 
 const REPORT_SECTIONS: Array<{ id: string; label: string; icon: ElementType }> = [
+  { id: 'software-navigator', label: 'Architecture Navigator', icon: Compass },
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'project-dna', label: 'Project DNA', icon: Fingerprint },
   { id: 'rankings', label: 'Rankings', icon: Trophy },
@@ -136,7 +138,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [verdictRevealed, setVerdictRevealed] = useState(demo)
-  const activeSection = section || 'overview'
+  const activeSection = section || 'software-navigator'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -265,7 +267,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-xs font-mono text-yowon-muted uppercase tracking-[0.3em] mb-2">
-            Judge-Grade Evaluation Dashboard
+            Enterprise Software Architecture Intelligence Platform
           </p>
           <h1 className="text-3xl sm:text-5xl font-display font-bold text-yowon-text mb-2">
             {report.project_name}
@@ -367,6 +369,7 @@ export default function ReportPage({ demo = false }: ReportPageProps) {
                 </div>
 
                 <Suspense fallback={<CardSkeleton />}>
+                  {activeSection === 'software-navigator' && <SoftwareArchitectureNavigator projectId={projectId || ''} />}
                   {activeSection === 'overview' && <OverviewPanel projectId={projectId || ''} />}
                   {activeSection === 'project-dna' && <DNASelector projectId={projectId || ''} />}
                   {activeSection === 'rankings' && <RankingsPanel projectId={projectId || ''} />}

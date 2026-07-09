@@ -2,21 +2,16 @@
 
 from crewai import Agent
 
-from config import AGENT_MAX_EXECUTION_TIME, AGENT_MAX_ITER
+
+
 from llm_utils import get_crewai_llm, get_model_name
 from logging_config import get_logger
 
 logger = get_logger(__name__)
 
-_COMMON = """
-Evaluate ONLY evidence in the input. Never invent files, metrics, or competitors.
-If evidence is missing, lower confidence below 0.5 and note in weaknesses.
-Apply the supplied PROJECT_TYPE rubric. Do not impose enterprise expectations on academic or prototype work.
-Use the full 0-100 scale: 50 is limited/average, 70 is good, and 90+ requires exceptional evidence.
-Output ONLY valid JSON. No markdown. No reasoning preamble. No think tags.
-Start your response with { and end with }.
-Do not use tools. Do not ask questions. One response only.
-"""
+from eval_context.prompt_registry import get_template_and_meta
+
+_COMMON = get_template_and_meta("common_rules")["template"]
 
 
 def _agent(
@@ -32,7 +27,7 @@ def _agent(
     return Agent(
         role=role,
         goal=goal,
-        backstory=backstory + _COMMON,
+        backstory=backstory + "\n" + _COMMON,
         llm=get_crewai_llm("specialist", use_fallback=use_fallback),
         verbose=False,
         allow_delegation=False,
@@ -46,7 +41,7 @@ def create_technical_agent(*, use_fallback: bool = False) -> Agent:
         "FORGE",
         "Principal Software Engineer",
         "Return JSON with technical_score, strengths, weaknesses, risks, confidence.",
-        "You assess architecture, code quality, and deployment readiness.",
+        get_template_and_meta("technical_agent")["template"],
         use_fallback=use_fallback,
     )
 
@@ -56,7 +51,7 @@ def create_security_agent(*, use_fallback: bool = False) -> Agent:
         "SENTINEL",
         "Application Security Auditor",
         "Return JSON with security_score, risk_level, critical_findings, confidence.",
-        "You audit OWASP risks, secrets, and dependency issues from static scan data.",
+        get_template_and_meta("security_agent")["template"],
         use_fallback=use_fallback,
     )
 
@@ -66,7 +61,7 @@ def create_innovation_agent(*, use_fallback: bool = False) -> Agent:
         "VISIONARY",
         "Technology Innovation Analyst",
         "Return JSON with innovation_score, scalability_score, differentiators, scalability_risk, confidence.",
-        "You assess novelty, differentiation, and scale readiness.",
+        get_template_and_meta("innovation_agent")["template"],
         use_fallback=use_fallback,
     )
 
@@ -76,7 +71,7 @@ def create_presentation_agent(*, use_fallback: bool = False) -> Agent:
         "SHOWCASE",
         "Pitch Coach",
         "Return JSON with presentation_score, strengths, improvements, confidence.",
-        "You evaluate pitch clarity, problem/solution narrative, and deck quality.",
+        get_template_and_meta("presentation_agent")["template"],
         use_fallback=use_fallback,
     )
 
@@ -86,6 +81,6 @@ def create_risk_agent(*, use_fallback: bool = False) -> Agent:
         "GUARDIAN",
         "Deployment Risk Analyst",
         "Return JSON with impact_score, failure_modes, top_risks, confidence.",
-        "You predict real-world impact and failure modes under production stress.",
+        get_template_and_meta("risk_agent")["template"],
         use_fallback=use_fallback,
     )

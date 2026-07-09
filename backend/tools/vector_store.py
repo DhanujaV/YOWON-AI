@@ -11,7 +11,6 @@ Collections:
 
 from __future__ import annotations
 
-from typing import Optional
 
 import chromadb
 from chromadb.config import Settings

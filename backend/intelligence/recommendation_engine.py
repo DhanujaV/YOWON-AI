@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict
 from intelligence.models import EvidenceRecord, RecommendationRecord
 from intelligence.evidence_engine import RULES_METADATA
 
